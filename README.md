@@ -98,3 +98,5 @@ MovieDB/
 5. Verify output in the console and check the `store/` directory for saved tables.
 6. After tests, commit changes to a new branch that begins with `feature-<name>`. Add the name of the feature you worked on.
 7. Issue a Pull Request. 
+8. Do not include the files in the `store/` directory in your Pull Request.
+9. Do not include any `.iml` files that `IntelliJ` generates.
