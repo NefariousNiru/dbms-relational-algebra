@@ -223,53 +223,85 @@ public class Table
 
         List <Comparable []> rows = new ArrayList <> ();
 
-        //  T O   B E   I M P L E M E N T E D
-
         var token = condition.split (" ");
-        var colNo = col (token [0]);
+        if (token.length != 3) {
+            throw new IllegalArgumentException("Condition must in the format 'column op value'");
+        }
+
+        String columnName = token[0];
+        String operator =  token[1];
+        String value = token[2];
+
+        int colNo = col(columnName);
+        if (colNo == -1) {
+            String errorMessage = String.format("Column %s does not exists", columnName);
+            throw new IllegalArgumentException(errorMessage);
+        }
+
+        Comparable<?> parsedValue = parseValue(value, domain[colNo]);
+
         for (var t : tuples) {
-            if (satifies (t, colNo, token [1], token [2])) rows.add (t);
+            if (satifies (t, colNo, operator, parsedValue)) {
+                rows.add (t);
+            } // if
         } // for
 
         return new Table (name + count++, attribute, domain, key, rows);
     } // select
 
     /************************************************************************************
-     * Does tuple t satify the condition t[colNo] op value where op is ==, !=, <, <=, >, >=?
+     * Parses a string value into its corresponding type based on the provided domain.
      *
-     * #usage satisfies (t, 1, "<", "1980")
+     * #Usage: parseValue("1980", Integer.class) -> 1980
      *
-     * @param colNo  the attribute's column number
-     * @param op     the comparison operator
-     * @param value  the value to compare with (must be converted, String -> domain type)
-     * @return  whether the condition is satisfied
+     * @param value   the string representation of the value to be parsed
+     * @param domain  the class type of the domain (e.g., Integer.class, String.class)
+     * @return        the parsed value as a Comparable object of the specified type
+     * @throws        IllegalArgumentException if the domain type is unsupported
      */
-    private boolean satifies (Comparable [] t, int colNo, String op, String value)
+    private Comparable<?> parseValue(String value, Class<?> domain) {
+        String errorMessage = String.format("Unsupported Domain Type: %s", domain.getName());
+        return switch (domain.getSimpleName()) {
+            case "Byte"      -> Byte.valueOf(value);
+            case "Character" -> value.charAt(0);
+            case "Double"    -> Double.valueOf(value);
+            case "Float"     -> Float.valueOf(value);
+            case "Integer"   -> Integer.valueOf(value);
+            case "Long"      -> Long.valueOf(value);
+            case "Short"     -> Short.valueOf(value);
+            case "String"    -> value;
+            default -> throw new IllegalArgumentException(errorMessage);
+        };
+    }
+
+    /************************************************************************************
+     * Evaluates whether a tuple satisfies a given condition on a specified column.
+     * The condition is in the form t[colNo] op value, where `op` can be ==, !=, <, <=, >, >=.
+     *
+     * #Usage: satisfies(t, 1, "<", 1980)
+     *
+     * @param t       the tuple (array of Comparable values) to evaluate
+     * @param colNo   the index of the column in the tuple to be compared
+     * @param op      the comparison operator (==, !=, <, <=, >, >=)
+     * @param value   the value to compare the tuple's column value against
+     * @return        true if the condition is satisfied, false otherwise
+     * @throws        IllegalArgumentException if the operator is unsupported or types are mismatched
+     */
+    private boolean satifies (Comparable [] t, int colNo, String op, Comparable<?> value)
     {
         var t_A = t[colNo];
         out.println ("satisfies: " + t_A + " " + op + " " + value);
-        var valt = switch (domain [colNo].getSimpleName ()) {      // type converted
-        case "Byte"      -> Byte.valueOf (value);
-        case "Character" -> value.charAt (0);
-        case "Double"    -> Double.valueOf (value);
-        case "Float"     -> Float.valueOf (value);
-        case "Integer"   -> Integer.valueOf (value);
-        case "Long"      -> Long.valueOf (value);
-        case "Short"     -> Short.valueOf (value);
-        case "String"    -> value;
-        default          -> value;
-        }; // switch
-        var comp = t_A.compareTo (valt);
-
+        int compare = t_A.compareTo(value);
+        String errorMessage = String.format("Unsupported Operator: %s", op);
         return switch (op) {
-        case "==" -> comp == 0;
-        case "!=" -> comp != 0;
-        case "<"  -> comp <  0;
-        case "<=" -> comp <= 0;
-        case ">"  -> comp >  0;
-        case ">=" -> comp >= 0;
-        default   -> false;
-        }; // switch
+            case "==" -> compare == 0;
+            case "!=" -> compare != 0;
+            case "<"  -> compare <  0;
+            case "<=" -> compare <= 0;
+            case ">"  -> compare >  0;
+            case ">=" -> compare >= 0;
+            default -> throw new IllegalArgumentException(errorMessage);
+        };
     } // satifies
 
     /************************************************************************************
@@ -657,7 +689,7 @@ public class Table
 
         for (var i = 0; i < className.length; i++) {
             try {
-                classArray [i] = Class.forName ("java.lang. " + className [i]);
+                classArray [i] = Class.forName ("java.lang." + className [i]);
             } catch (ClassNotFoundException ex) {
                 out.println ("findClass: " + ex);
             } // try
