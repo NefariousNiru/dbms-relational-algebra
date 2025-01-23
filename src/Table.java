@@ -187,9 +187,8 @@ public class Table
 
         List <Comparable []> rows = new ArrayList <> ();
 
-
         for (var tuple : tuples) {
-            var newTuples = new Comparable[attrs.length]; //array holds projected tuple
+            var newTuples = new Comparable[attrs.length]; //array that holds projected tuple
             //find corresponding col for each attr and add it to newTuples
             for (int i = 0; i < attrs.length; i++) {
                 newTuples[i] = tuple[col(attrs[i])];
