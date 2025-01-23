@@ -8,7 +8,7 @@
  * run     java MovieDB    
  */
 
-package src;
+
 
 import java.io.*;
 import java.util.*;

@@ -7,7 +7,7 @@
  * @see http://leepoint.net/notes-java/data/expressions/22compareobjects.html
  */
 
-package src;
+
 
 import java.io.Serializable;
 
