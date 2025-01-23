@@ -330,17 +330,30 @@ public class Table
      * @param table2  the rhs table in the union operation
      * @return  a table representing the union
      */
-    public Table union (Table table2)
-    {
-        out.println ("RA> " + name + ".union (" + table2.name + ")");
-        if (! compatible (table2)) return null;
+    public Table union(Table table2) {
+        out.println("RA> " + name + ".union(" + table2.name + ")");
+        if (!compatible(table2)) return null;
 
-        List <Comparable []> rows = new ArrayList <> ();
+        List<Comparable[]> rows = new ArrayList<>();
+        Set<List<Comparable>> seen = new HashSet<>();
 
-        //  T O   B E   I M P L E M E N T E D 
+        // Add all tuples from the current table
+        for (var t : tuples) {
+            if (seen.add(Arrays.asList(t))) {
+                rows.add(t);
+            }
+        }
 
-        return new Table (name + count++, attribute, domain, key, rows);
+        // Add tuples from the second table, ignoring duplicates
+        for (var t : table2.tuples) {
+            if (seen.add(Arrays.asList(t))) {
+                rows.add(t);
+            }
+        }
+
+        return new Table(name + count++, attribute, domain, key, rows);
     } // union
+
 
     /************************************************************************************
      * Take the difference of this table and table2.  Check that the two tables are
