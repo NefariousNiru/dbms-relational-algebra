@@ -8,6 +8,8 @@
  * run     java MovieDB    
  */
 
+
+
 import java.io.*;
 import java.util.*;
 import java.util.function.*;
@@ -371,7 +373,19 @@ public class Table
 
         List <Comparable []> rows = new ArrayList <> ();
 
-        //  T O   B E   I M P L E M E N T E D 
+        // Add rows from 'this' table that are not in 'table2'.
+        for (var row : tuples) {
+            boolean found = false;
+            for (var otherRow : table2.tuples) {
+                if (Arrays.equals(row, otherRow)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                rows.add(row);
+            }
+        }
 
         return new Table (name + count++, attribute, domain, key, rows);
     } // minus
