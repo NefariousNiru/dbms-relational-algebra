@@ -417,10 +417,47 @@ public class Table
         var u_attrs = attributes2.split (" ");
         var rows    = new ArrayList <Comparable []> ();
 
-        //  T O   B E   I M P L E M E N T E D 
+        if (t_attrs.length != u_attrs.length) {
+            throw new IllegalArgumentException("Number of attributes in attributes1 and attributes2 must match.");
+        }
+
+        for (var thisRow : this.tuples) {
+            for (var thatRow : table2.tuples) {
+                boolean match = true;
+
+                // Check if all corresponding attributes match
+                for (int i = 0; i < t_attrs.length; i++) {
+                    int thisIndex = col(t_attrs[i]);
+                    int thatIndex = table2.col(u_attrs[i]);
+                    if (thisIndex == -1 || thatIndex == -1) {
+                        throw new IllegalArgumentException("Invalid attribute name: " + t_attrs[i] + " or " + u_attrs[i]);
+                    }
+                    if (!thisRow[thisIndex].equals(thatRow[thatIndex])) {
+                        match = false;
+                        break;
+                    }
+                }
+
+                // If all attributes match, merge the rows
+                if (match) {
+                    var newRow = concat(thisRow, thatRow);
+                    rows.add(newRow);
+                }
+            }
+        }
+
+        // Disambiguate duplicate attributes from table2
+        var newAttributes = new ArrayList<String>(Arrays.asList(attribute));
+        for (String attr : table2.attribute) {
+            if (newAttributes.contains(attr)) {
+                newAttributes.add(attr + "2");
+            } else {
+                newAttributes.add(attr);
+            }
+        }
 
         return new Table (name + count++, concat (attribute, table2.attribute),
-                                          concat (domain, table2.domain), key, rows);
+                concat(domain, table2.domain), key, rows);
     } // join
 
     /************************************************************************************
@@ -438,12 +475,46 @@ public class Table
     {
         out.println ("RA> " + name + ".join (" + condition + ", " + table2.name + ")");
 
-        var rows = new ArrayList <Comparable []> ();
+        var tokens = condition.split(" ");
+        if (tokens.length != 3) {
+            throw new IllegalArgumentException("Condition must be in the format 'attribute1 <op> attribute2'");
+        }
 
-        //  T O   B E   I M P L E M E N T E D
+        String attribute1 = tokens[0];
+        String operator = tokens[1];
+        String attribute2 = tokens[2];
 
-        return new Table (name + count++, concat (attribute, table2.attribute),
-                                          concat (domain, table2.domain), key, rows);
+        int index1 = col(attribute1);
+        int index2 = table2.col(attribute2);
+
+        if (index1 == -1 || index2 == -1) {
+            throw new IllegalArgumentException("Invalid attributes in condition: " + attribute1 + ", " + attribute2);
+        }
+
+        var rows = new ArrayList<Comparable[]>();
+
+        // Perform the theta-join using a nested loop
+        for (var thisRow : this.tuples) {
+            for (var thatRow : table2.tuples) {
+                if (satifies(thisRow, index1, operator, thatRow[index2])) {
+                    var newRow = concat(thisRow, thatRow);
+                    rows.add(newRow);
+                }
+            }
+        }
+
+        // Disambiguate duplicate attribute names from table2
+        var newAttributes = new ArrayList<String>(Arrays.asList(attribute));
+        for (String attr : table2.attribute) {
+            if (newAttributes.contains(attr)) {
+                newAttributes.add(attr + "2");
+            } else {
+                newAttributes.add(attr);
+            }
+        }
+
+        var newDomains = concat(domain, table2.domain);
+        return new Table(name + count++, newAttributes.toArray(new String[0]), newDomains, key, rows);
     } // join
 
     /************************************************************************************
@@ -477,13 +548,65 @@ public class Table
     {
         out.println ("RA> " + name + ".join (" + table2.name + ")");
 
-        var rows = new ArrayList <Comparable []> ();
+        var commonAttributes = new ArrayList<String>();
+        var commonIndicesThis = new ArrayList<Integer>();
+        var commonIndicesOther = new ArrayList<Integer>();
+        for (int i = 0; i < attribute.length; i++) {
+            for (int j = 0; j < table2.attribute.length; j++) {
+                if (attribute[i].equals(table2.attribute[j])) {
+                    commonAttributes.add(attribute[i]);
+                    commonIndicesThis.add(i);
+                    commonIndicesOther.add(j);
+                }
+            }
+        }
 
-        //  T O   B E   I M P L E M E N T E D 
+        var rows = new ArrayList<Comparable[]>();
+        for (var thisRow : this.tuples) {
+            for (var thatRow : table2.tuples) {
+                boolean match = true;
 
-        // FIX - eliminate duplicate columns
-        return new Table (name + count++, concat (attribute, table2.attribute),
-                                          concat (domain, table2.domain), key, rows);
+                // Check if all common attributes match
+                for (int k = 0; k < commonIndicesThis.size(); k++) {
+                    int thisIndex = commonIndicesThis.get(k);
+                    int thatIndex = commonIndicesOther.get(k);
+
+                    if (!thisRow[thisIndex].equals(thatRow[thatIndex])) {
+                        match = false;
+                        break;
+                    }
+                }
+
+                // If all common attributes match, merge the rows
+                if (match) {
+                    var newRow = new ArrayList<Comparable>();
+                    // Add attributes from the current table
+                    Collections.addAll(newRow, thisRow);
+
+                    // Add attributes from the other table, excluding duplicates
+                    for (int j = 0; j < thatRow.length; j++) {
+                        if (!commonIndicesOther.contains(j)) {
+                            newRow.add(thatRow[j]);
+                        }
+                    }
+
+                    rows.add(newRow.toArray(new Comparable[0]));
+                }
+            }
+        }
+
+        var newAttributes = new ArrayList<String>(Arrays.asList(attribute));
+        var newDomains = new ArrayList<>(Arrays.asList(domain));
+
+        for (int i = 0; i < table2.attribute.length; i++) {
+            if (!commonAttributes.contains(table2.attribute[i])) {
+                newAttributes.add(table2.attribute[i]);
+                newDomains.add(table2.domain[i]);
+            }
+        }
+
+        return new Table(name + count++, newAttributes.toArray(new String[0]), newDomains.toArray(new Class[0]), key, rows);
+
     } // join
 
     /************************************************************************************
