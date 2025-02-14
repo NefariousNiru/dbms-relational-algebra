@@ -73,7 +73,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.NO_MAP;
+    private static final MapType mType = MapType.HASH_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
