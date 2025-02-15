@@ -325,7 +325,12 @@ public class Table
 
         List <Comparable []> rows = new ArrayList <> ();
 
-        //  T O   B E   I M P L E M E N T E D  - Project 2
+        // Checks if index is not null and index contains the key
+        if (index != null && index.containsKey(keyVal)) {
+            rows.add(index.get(keyVal));                               // O(1) Lookup and append
+        } else {
+            out.println("INFO: No matching record found for key: " + keyVal);
+        }
 
         return new Table (name + count++, attribute, domain, key, rows);
     } // select
@@ -827,10 +832,21 @@ public class Table
      *          with the given domains
      */
     private boolean typeCheck (Comparable [] t)
-    { 
-        //  T O   B E   I M P L E M E N T E D 
+    {
+        if (t.length != domain.length) {
+            System.out.println("ERROR: Tuple length mismatch. Expected " + domain.length + " but got " + t.length);
+            return false;
+        }
 
-        return true;      // change once implemented
+        for (int i = 0; i < t.length; i++) {
+            if (!domain[i].isInstance(t[i])) {  // Ensure the type matches the expected domain
+                System.out.println("ERROR: Type mismatch at column " + attribute[i] +
+                        ". Expected " + domain[i].getSimpleName() +
+                        " but got " + (t[i] == null ? "null" : t[i].getClass().getSimpleName()));
+                return false;
+            }
+        }
+        return true;
     } // typeCheck
 
     /************************************************************************************
