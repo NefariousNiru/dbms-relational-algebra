@@ -345,27 +345,53 @@ public class Table
      */
     public Table union(Table table2) {
         out.println("RA> " + name + ".union(" + table2.name + ")");
-        if (!compatible(table2)) return null;
 
+        if (table2 == null) {
+            throw new IllegalArgumentException("The second table cannot be null.");
+        }
+
+        if (!compatible(table2)) {
+            throw new IllegalArgumentException("Tables are not compatible for union.");
+        }
+
+        // Use a HashSet to efficiently eliminate duplicate tuples
+        Set<KeyType> uniqueKeys = new HashSet<>();
         List<Comparable[]> rows = new ArrayList<>();
-        Set<List<Comparable>> seen = new HashSet<>();
 
-        // Add all tuples from the current table
+        // Insert tuples from the first table
         for (var t : tuples) {
-            if (seen.add(Arrays.asList(t))) {
+            KeyType key = extractPrimaryKey(t);
+            if (uniqueKeys.add(key)) {  // Only add if it's unique
                 rows.add(t);
             }
         }
 
-        // Add tuples from the second table, ignoring duplicates
+        // Insert tuples from the second table
         for (var t : table2.tuples) {
-            if (seen.add(Arrays.asList(t))) {
+            KeyType key = extractPrimaryKey(t);
+            if (uniqueKeys.add(key)) {  // Avoid duplicates
                 rows.add(t);
             }
         }
 
         return new Table(name + count++, attribute, domain, key, rows);
     } // union
+    private KeyType extractPrimaryKey(Comparable[] tuple) {
+        if (tuple == null) {
+            throw new IllegalArgumentException("Tuple cannot be null.");
+        }
+
+        Comparable[] keyValues = new Comparable[key.length];
+        for (int i = 0; i < key.length; i++) {
+            int colIndex = col(key[i]);
+            if (colIndex == -1) {
+                throw new IllegalArgumentException("Primary key column not found: " + key[i]);
+            }
+            keyValues[i] = tuple[colIndex];
+        }
+        return new KeyType(keyValues);
+    }
+
 
 
     /************************************************************************************

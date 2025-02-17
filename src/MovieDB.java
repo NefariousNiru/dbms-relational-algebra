@@ -129,11 +129,60 @@ class MovieDB
         test_indexed_select(movie, movieStar);
 
 
-        //--------------------- union: movie UNION cinema
+        //--------------------- union tests ---------------------
 
-        out.println ();
-        var t_union = movie.union (cinema);
-        t_union.print ();
+        // Test 1: Union of two non-empty tables with some common elements
+        out.println("Test 1: Union of movie and cinema (overlapping rows)");
+        var t_union1 = movie.union(cinema);
+        t_union1.print();
+
+        // Test 2: Union of two non-empty tables with no common elements
+        var uniqueTable = new Table("uniqueTable", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+
+        var uniqueFilm = new Comparable[] { "Inception", 2010, 148, "sciFi", "WarnerBros", 56789 };
+        uniqueTable.insert(uniqueFilm);
+
+        out.println("Test 2: Union of movie and uniqueTable (no common elements)");
+        var t_union2 = movie.union(uniqueTable);
+        t_union2.print();
+
+        // Test 3: Union of a table with itself (should return the same table)
+        out.println("Test 3: Union of movie with itself (idempotency test)");
+        var t_union3 = movie.union(movie);
+        t_union3.print();
+
+        // Test 4: Union with an empty table (should return the original table)
+        var emptyTable = new Table("emptyTable", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+
+        out.println("Test 4: Union of movie with an empty table (identity test)");
+        var t_union4 = movie.union(emptyTable);
+        t_union4.print();
+
+        // Test 5: Union of two empty tables (should return an empty table)
+        var anotherEmptyTable = new Table("anotherEmptyTable", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+
+        out.println("Test 5: Union of two empty tables (empty result test)");
+        var t_union5 = emptyTable.union(anotherEmptyTable);
+        t_union5.print();
+
+        // Test 6: Union of tables with different schemas (should fail or handle gracefully)
+        var mismatchedTable = new Table("mismatchedTable", "director budget",
+                "String Float", "director");
+
+        var directorEntry = new Comparable[] { "Christopher_Nolan", 200_000_000f };
+        mismatchedTable.insert(directorEntry);
+
+        out.println("Test 6: Union of movie and mismatchedTable (schema mismatch)");
+        try {
+            var t_union6 = movie.union(mismatchedTable);
+            t_union6.print();
+        } catch (Exception e) {
+            out.println("Expected error due to schema mismatch: " + e.getMessage());
+        }
+
 
         //--------------------- minus: movie MINUS cinema
 
