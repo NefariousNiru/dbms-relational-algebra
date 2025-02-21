@@ -131,6 +131,40 @@ class MovieDB
 
         //--------------------- union tests ---------------------
 
+        test_indexed_union(movie, cinema);
+
+
+        //--------------------- minus: movie MINUS cinema
+
+        out.println ();
+        var t_minus = movie.minus (cinema);
+        t_minus.print ();
+
+        //--------------------- equi-join: movie JOIN studio ON studioName = name
+
+        out.println ();
+        var t_join = movie.join ("studioName", "name", studio);
+        t_join.print ();
+
+        //--------------------- natural join: movie JOIN studio
+
+        out.println ();
+        var t_join2 = movie.join (cinema);
+        t_join2.print ();
+
+        //--------------------- theta join: movie JOIN studio
+        out.println ();
+        var t_join3 = movie.join ("studioName == name", studio);
+        t_join3.print ();
+
+    } // main
+
+    /*************************************************************************************
+     * Method for testing indexed select.
+     * @param movie  the movie table
+     * @param cinema the cinema table
+     */
+    private static void test_indexed_union(Table movie, Table cinema) {
         // Test 1: Union of two non-empty tables with some common elements
         out.println("Test 1: Union of movie and cinema (overlapping rows)");
         var t_union1 = movie.union(cinema);
@@ -182,39 +216,14 @@ class MovieDB
         } catch (Exception e) {
             out.println("Expected error due to schema mismatch: " + e.getMessage());
         }
-
-
-        //--------------------- minus: movie MINUS cinema
-
-        out.println ();
-        var t_minus = movie.minus (cinema);
-        t_minus.print ();
-
-        //--------------------- equi-join: movie JOIN studio ON studioName = name
-
-        out.println ();
-        var t_join = movie.join ("studioName", "name", studio);
-        t_join.print ();
-
-        //--------------------- natural join: movie JOIN studio
-
-        out.println ();
-        var t_join2 = movie.join (cinema);
-        t_join2.print ();
-
-        //--------------------- theta join: movie JOIN studio
-        out.println ();
-        var t_join3 = movie.join ("studioName == name", studio);
-        t_join3.print ();
-
-    } // main
+    }
 
     /*************************************************************************************
      * Method for testing indexed select.
      * @param movie  the movie table
      * @param movieStar the movieStar table
      */
-    public static void test_indexed_select(Table movie, Table movieStar) {
+    private static void test_indexed_select(Table movie, Table movieStar) {
     //--------------------- indexed select: key
 
     out.println ();
