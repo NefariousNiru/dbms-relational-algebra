@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.TREE_MAP;
+    private static final MapType mType = MapType.HASH_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
@@ -1085,31 +1085,15 @@ public class Table
     } // extractDom
 
     /**
-     * Creates a deep copy of this Table.
-     * Copies the schema, all tuples, and rebuilds the primary index.
+     * Returns the current MapType used for creating indices in the Table.
+     * This indicates which implementation (NO_MAP, TREE_MAP, or HASH_MAP) is active.
      *
-     * @return a new Table object that is a deep copy of this Table.
+     * @return the currently configured MapType.
      */
-    public Table copy() {
-        // Create a new Table with the same schema (and a new name if desired)
-        Table copy = new Table(this.name + "_copy", this.attribute, this.domain, this.key);
-
-        // Deep copy each tuple
-        for (Comparable[] row : this.tuples) {
-            copy.tuples.add(Arrays.copyOf(row, row.length));
-        }
-
-        // Rebuild the primary index
-        for (Comparable[] row : copy.tuples) {
-            KeyType pk = copy.extractPrimaryKey(row);
-            copy.index.put(pk, row);
-        }
-
-        // (Optional) If you need to copy secondary indices, do it here.
-        // For now, we can leave secondaryIndices empty or rebuild them as needed.
-
-        return copy;
+    public static MapType getMapType() {
+        return mType;
     }
+
 
 } // Table
 
