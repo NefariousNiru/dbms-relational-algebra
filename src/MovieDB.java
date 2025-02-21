@@ -205,11 +205,11 @@ class MovieDB
 
     //--------------------- indexed select: Insert & Immediate Lookup
 
-    out.println();
-    var newMovie = new Comparable[]{"New_Movie", 2025, 150, "action", "Warner", 55555};
-    movie.insert(newMovie);
-    var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));  // Should find the inserted movie
-    t_iselect8.print();
+//    out.println();
+//    var newMovie = new Comparable[]{"New_Movie", 2025, 150, "action", "Warner", 55555};
+//    movie.insert(newMovie);
+//    var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));  // Should find the inserted movie
+//    t_iselect8.print();
 }
 } // MovieDB
 

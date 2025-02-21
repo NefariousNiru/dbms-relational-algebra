@@ -367,6 +367,24 @@ public class Table
         return new Table(name + count++, attribute, domain, key, rows);
     } // union
 
+    /**
+     * Extracts key values from a tuple based on the key attribute names.
+     *
+     * @param tuple The tuple from which to extract the key values.
+     * @param keyAttributes The attribute names that form the key.
+     * @return An array of key values.
+     */
+    private Comparable[] extractKey(Comparable[] tuple, String[] keyAttributes) {
+        Comparable[] keyValues = new Comparable[keyAttributes.length];
+        for (int i = 0; i < keyAttributes.length; i++) {
+            int colIndex = col(keyAttributes[i]); // Find the column index of the key attribute
+            if (colIndex == -1) {
+                throw new IllegalArgumentException("Key attribute " + keyAttributes[i] + " not found in table.");
+            }
+            keyValues[i] = tuple[colIndex]; // Extract the value
+        }
+        return keyValues;
+    }
 
     /************************************************************************************
      * Take the difference of this table and table2.  Check that the two tables are
@@ -379,26 +397,47 @@ public class Table
      */
     public Table minus (Table table2)
     {
-        out.println ("RA> " + name + ".minus (" + table2.name + ")");
-        if (! compatible (table2)) return null;
+        try {
+            out.println("RA> " + name + ".minus (" + table2.name + ")");
 
-        List <Comparable []> rows = new ArrayList <> ();
+            // 1. Schema Check: Ensure both tables have the same structure
+            if (!Arrays.equals(attribute, table2.attribute)) {
+                throw new IllegalArgumentException("Schemas do not match. MINUS operation aborted.");
+            }
 
-        // Add rows from 'this' table that are not in 'table2'.
-        for (var row : tuples) {
-            boolean found = false;
-            for (var otherRow : table2.tuples) {
-                if (Arrays.equals(row, otherRow)) {
-                    found = true;
-                    break;
+            // 2. Handle Empty Tables
+            if (this.tuples.isEmpty()) {
+                out.println("Table " + this.name + " is empty. Returning an empty result.");
+                return new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
+            }
+            if (table2.tuples.isEmpty()) {
+                out.println("Table " + table2.name + " is empty. Returning original table.");
+                return this;
+            }
+
+            // 3. Create the Result Table
+            Table result = new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
+
+            // 4. Convert table2 tuples to a HashSet for fast lookup
+            Set<List<Comparable>> sSet = new HashSet<>();
+            for (Comparable[] tuple : table2.tuples) {
+                sSet.add(Arrays.asList(tuple)); // Store tuple as a list for proper comparison
+            }
+
+            // 5. Add Tuples from R that are NOT in S (Checking Full Row Using Arrays.equals)
+            for (Comparable[] tuple : this.tuples) {
+                if (!sSet.contains(Arrays.asList(tuple))) {  // Properly check full row match
+                    result.tuples.add(tuple);
                 }
             }
-            if (!found) {
-                rows.add(row);
-            }
-        }
 
-        return new Table (name + count++, attribute, domain, key, rows);
+            return result;
+
+        } catch (Exception e) {
+            out.println("Error in MINUS operation: " + e.getMessage());
+            e.printStackTrace();
+            return null; // Return null if operation fails
+        }
     } // minus
 
     /************************************************************************************
@@ -887,6 +926,56 @@ public class Table
 
         return obj;
     } // extractDom
+
+    public static void testMinusOperation() {
+        out.println("\n==== TESTING MINUS OPERATION ====");
+
+        // Define Sample Schema
+        String[] attributes = {"id", "name"};
+        Class[] domain = {Integer.class, String.class};
+        String[] key = {"id"};
+
+        // Create Table R with Data
+        Table R = new Table("Students", attributes, domain, key);
+        R.insert(new Comparable[]{1, "Alice"});
+        R.insert(new Comparable[]{2, "Bob"});
+        R.insert(new Comparable[]{3, "Charlie"});
+
+        // Create Table S with Data
+        Table S = new Table("Graduated_Students", attributes, domain, key);
+        S.insert(new Comparable[]{2, "Bob"});
+        S.insert(new Comparable[]{3, "Charlie"});
+
+        // Perform Minus Operation
+        Table result = R.minus(S);
+
+        // Expected Output: Only Alice should remain
+        if (result != null) {
+            out.println("Expected Output: Alice\nActual Output:");
+            result.print();
+        } else {
+            out.println("Test Failed: Result table is null.");
+        }
+
+        // Test with Empty Table
+        Table emptyTable = new Table("Empty", attributes, domain, key);
+        Table result2 = R.minus(emptyTable);
+        out.println("Expected Output: All students remain\nActual Output:");
+        result2.print();
+
+        // Test Schema Mismatch
+        String[] differentAttributes = {"id", "age"};
+        Table invalidTable = new Table("Invalid", differentAttributes, domain, key);
+        try {
+            Table result3 = R.minus(invalidTable);
+            if (result3 == null) {
+                out.println("Schema Mismatch Test Passed.");
+            }
+        } catch (Exception e) {
+            out.println("Schema Mismatch Test Caught Exception: " + e.getMessage());
+        }
+    }
+
 
 } // Table
 
