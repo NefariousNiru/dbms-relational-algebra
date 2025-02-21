@@ -67,6 +67,10 @@ public class Table
      */
     private final Map <KeyType, Comparable []> index;
 
+    /** Index into tuples (maps key to tuple).
+     */
+    private final Map<String, Map<Comparable, List<Comparable[]>>> secondaryIndices;
+
     /** The supported map types.
      */
     private enum MapType { NO_MAP, TREE_MAP, HASH_MAP, LINHASH_MAP, BPTREE_MAP }
@@ -90,6 +94,23 @@ public class Table
         default          -> null;
         }; // switch
     } // makeMap
+
+
+    /**
+     * Creates a map for secondary indices (column value → list of rows).
+     * Ensures that the selected map type is consistent with `mType`.
+     *
+     * @return A map where keys are column values, and values are lists of rows.
+     */
+    private static Map<Comparable, List<Comparable[]>> makeIndexMap() {
+        return switch (mType) {
+            case TREE_MAP    -> new TreeMap<>();
+            case HASH_MAP    -> new HashMap<>();
+//        case LINHASH_MAP -> new LinHashMap <> (KeyType.class, Comparable [].class);
+//        case BPTREE_MAP  -> new BpTreeMap <> (KeyType.class, Comparable [].class);
+            default          -> throw new IllegalArgumentException("Unsupported index type: " + mType);
+        };
+    }
 
     /************************************************************************************
      * Concatenate two arrays of type T to form a new wider array.
@@ -127,6 +148,7 @@ public class Table
         key       = _key;
         tuples    = new ArrayList <> ();
         index     = makeMap ();
+        secondaryIndices = new HashMap<>();
         out.println (Arrays.toString (domain));
     } // constructor
 
@@ -148,6 +170,7 @@ public class Table
         key       = _key;
         tuples    = _tuples;
         index     = makeMap ();
+        secondaryIndices = new HashMap<>();
     } // constructor
 
     /************************************************************************************
@@ -168,6 +191,91 @@ public class Table
     //----------------------------------------------------------------------------------
     // Public Methods
     //----------------------------------------------------------------------------------
+
+    /**
+     * Creates a non-unique index on the specified column.
+     * The index maps each column value to a list of rows having that value.
+     *
+     * @param columnName The column to be indexed.
+     * @throws IllegalArgumentException If the column does not exist.
+     */
+    public void createIndex(String columnName)
+    {
+        out.println("Creating index on column: " + columnName);
+
+        int colIdx = col(columnName);
+        if (colIdx == - 1) {
+            throw new IllegalArgumentException("Column " + columnName + " does not exist in table " + name);
+        }
+
+        if (mType == MapType.NO_MAP) {
+            throw new IllegalArgumentException("Cannot create index when mType is NO_MAP.");
+        }
+
+        Map<Comparable, List<Comparable[]>> indexMap = makeIndexMap();
+
+        for (var tuple: tuples) {
+            Comparable key = tuple[colIdx];
+            indexMap.computeIfAbsent(key, k -> new ArrayList<>()).add(tuple);
+        }
+
+        secondaryIndices.put(columnName, indexMap);
+    }
+
+    /**
+     * Creates a unique index on the specified column.
+     * This ensures that no two tuples have the same value for the indexed column.
+     *
+     * @param columnName The column to be uniquely indexed.
+     * @throws IllegalArgumentException If the column does not exist or contains duplicates.
+     */
+    public void createUniqueIndex(String columnName) {
+        out.println("Creating unique index on column: " + columnName);
+
+        int colIdx = col(columnName);
+        if (colIdx == -1) {
+            throw new IllegalArgumentException("Column " + columnName + " does not exist in table " + name);
+        }
+
+        Map<Comparable, List<Comparable[]>> uniqueIndexMap = makeIndexMap();
+
+        for (var tuple : tuples) {
+            Comparable key = tuple[colIdx];
+            if (uniqueIndexMap.containsKey(key)) {
+                throw new IllegalArgumentException("Duplicate value found in column " + columnName + ": " + key);
+            }
+            List<Comparable[]> singletonList = new ArrayList<>();
+            singletonList.add(tuple);
+            uniqueIndexMap.put(key, singletonList);
+        }
+
+        secondaryIndices.put(columnName, uniqueIndexMap);
+    }
+
+    /**
+     * Drops an existing index on the specified column.
+     *
+     * @param columnName The column whose index should be dropped.
+     * @return `true` if the index was successfully removed, `false` if no index or no column existed.
+     */
+    public boolean dropIndex(String columnName) {
+        out.println("Dropping index on column: " + columnName);
+
+        int colIdx = col(columnName);
+        if (colIdx == -1) {
+            out.println("No such column exists in table " + name + ".");
+            return false;
+        }
+
+        if (secondaryIndices.containsKey(columnName)) {
+            secondaryIndices.remove(columnName);
+            out.println("Index on column " + columnName + " has been dropped.");
+            return true;
+        } else {
+            out.println("No index found on column " + columnName + ".");
+            return false;
+        }
+    }
 
     /************************************************************************************
      * Project the tuples onto a lower dimension by keeping only the given attributes.
@@ -681,16 +789,35 @@ public class Table
     {
         out.println ("DML> insert into " + name + " values (" + Arrays.toString (tup) + ")");
 
-        if (typeCheck (tup)) {
-            tuples.add (tup);
-            var keyVal = new Comparable [key.length];
-            var cols   = match (key);
-            for (var j = 0; j < keyVal.length; j++) keyVal [j] = tup [cols [j]];
-            if (mType != MapType.NO_MAP) index.put (new KeyType (keyVal), tup);
-            return tuples.size () - 1;                             // assumes it is added at the end
-        } else {
-            return -1;                                             // insert failed
-        } // if
+        if (!typeCheck(tup)) {
+            return -1;
+        }
+
+        KeyType primaryKey = extractPrimaryKey(tup);
+        if (index.containsKey(primaryKey)) {
+            throw new IllegalArgumentException("Duplicate primary key: " + primaryKey);
+        }
+
+        tuples.add(tup);
+
+        if (mType != MapType.NO_MAP) {
+            index.put(primaryKey, tup);
+        }
+
+        for (var entry : secondaryIndices.entrySet()) {
+            String columnName = entry.getKey();  // The column being indexed
+            Map<Comparable, List<Comparable[]>> columnIndex = entry.getValue();  // The index map for that column
+
+            int colIdx = col(columnName);
+            if (colIdx == -1) {
+                throw new IllegalStateException("Column " + columnName + " is indexed but does not exist in table " + name);
+            }
+
+            Comparable key = tup[colIdx];  // Get the value of the indexed column
+            columnIndex.computeIfAbsent(key, k -> new ArrayList<>()).add(tup);  // Add the tuple to the index
+        }
+
+        return tuples.size() - 1;
     } // insert
 
     /************************************************************************************
@@ -874,13 +1001,13 @@ public class Table
     private boolean typeCheck (Comparable [] t)
     {
         if (t.length != domain.length) {
-            System.out.println("ERROR: Tuple length mismatch. Expected " + domain.length + " but got " + t.length);
+            out.println("ERROR: Tuple length mismatch. Expected " + domain.length + " but got " + t.length);
             return false;
         }
 
         for (int i = 0; i < t.length; i++) {
             if (!domain[i].isInstance(t[i])) {  // Ensure the type matches the expected domain
-                System.out.println("ERROR: Type mismatch at column " + attribute[i] +
+                out.println("ERROR: Type mismatch at column " + attribute[i] +
                         ". Expected " + domain[i].getSimpleName() +
                         " but got " + (t[i] == null ? "null" : t[i].getClass().getSimpleName()));
                 return false;
