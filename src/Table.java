@@ -345,28 +345,68 @@ public class Table
      */
     public Table union(Table table2) {
         out.println("RA> " + name + ".union(" + table2.name + ")");
-        if (!compatible(table2)) return null;
 
-        List<Comparable[]> rows = new ArrayList<>();
-        Set<List<Comparable>> seen = new HashSet<>();
+        if (!compatible(table2)) {
+            throw new IllegalArgumentException("Tables are not compatible for union.");
+        }
 
-        // Add all tuples from the current table
-        for (var t : tuples) {
-            if (seen.add(Arrays.asList(t))) {
-                rows.add(t);
+        Map<KeyType, Comparable[]> unionMap = new LinkedHashMap<>();
+
+        if (index != null) {
+            unionMap.putAll(index);
+        } else {
+            for (var t : tuples) {
+                KeyType key = extractPrimaryKey(t);
+                unionMap.putIfAbsent(key, t);
             }
         }
 
-        // Add tuples from the second table, ignoring duplicates
-        for (var t : table2.tuples) {
-            if (seen.add(Arrays.asList(t))) {
-                rows.add(t);
+        if (table2.index != null) {
+            for (var entry : table2.index.entrySet()) {
+                unionMap.putIfAbsent(entry.getKey(), entry.getValue());
+            }
+        } else {
+            for (var t : table2.tuples) {
+                KeyType key = extractPrimaryKey(t);
+                unionMap.putIfAbsent(key, t);
             }
         }
 
-        return new Table(name + count++, attribute, domain, key, rows);
+        List<Comparable[]> rows = new ArrayList<>(unionMap.values());
+
+        Table result = new Table(name + count++, attribute, domain, key, rows);
+        if (mType != MapType.NO_MAP) {
+            result.index.putAll(unionMap);
+        }
+
+        return result;
     } // union
 
+    /**
+     * Extracts the primary key from a given tuple.
+     *
+     * This method retrieves the values corresponding to the primary key attributes
+     * and creates a {@link KeyType} instance representing the primary key.
+     *
+     * @param tuple The tuple (row) from which the primary key should be extracted.
+     * @return A {@link KeyType} instance representing the primary key.
+     * @throws IllegalArgumentException If the tuple is null or any primary key column is missing.
+     */
+    private KeyType extractPrimaryKey(Comparable[] tuple) {
+        if (tuple == null) {
+            throw new IllegalArgumentException("Tuple cannot be null.");
+        }
+
+        Comparable[] keyValues = new Comparable[key.length];
+        for (int i = 0; i < key.length; i++) {
+            int colIndex = col(key[i]);
+            if (colIndex == -1) {
+                throw new IllegalArgumentException("Primary key column not found: " + key[i]);
+            }
+            keyValues[i] = tuple[colIndex];
+        }
+        return new KeyType(keyValues);
+    }
 
     /************************************************************************************
      * Take the difference of this table and table2.  Check that the two tables are
