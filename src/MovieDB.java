@@ -99,6 +99,10 @@ class MovieDB
 
         movieStar.printIndex ();
 
+        //--------------------- Test Index Methods
+        
+        test_index_methods(movie);
+
         //--------------------- project: title year
 
         out.println ();
@@ -269,5 +273,42 @@ class MovieDB
     var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));  // Should find the inserted movie
     t_iselect8.print();
 }
+
+    /*************************************************************************************
+     * Method for testing indexed select.
+     * @param movie  the movie table
+     */
+    private static void test_index_methods(Table movie) {
+        out.println("\nTEST 1: Creating index on 'genre' (should work)");
+        movie.createIndex("genre");
+
+        //   TEST 2: Create a unique index on "year" (should work) all unique vals
+        out.println("\nTEST 2: Creating UNIQUE index on 'year' (should work)");
+        movie.createUniqueIndex("year");
+
+        
+        // TEST 3: Attempt to create a unique index on "genre" (should fail due to duplicates)
+        try {
+            out.println("\nTEST 3: Creating UNIQUE index on 'genre' (should FAIL)");
+            movie.createUniqueIndex("genre");  // This should throw an error
+        } catch (IllegalArgumentException e) {
+            out.println("Expected error: " + e.getMessage());
+        }
+
+        //   TEST 4: Drop index on "genre" (should remove index)
+        out.println("\nTEST 4: Dropping index on 'genre' (should work)");
+        boolean dropped = movie.dropIndex("genre");
+        out.println("Drop status: " + (dropped ? "Success" : "Failed"));
+
+        //   TEST 5: Drop index on "studioName" (should remove index)
+        out.println("\nTEST 5: Dropping index on 'studioName' (should work)");
+        dropped = movie.dropIndex("studioName");
+        out.println("Drop status: " + (dropped ? "Success" : "Failed"));
+
+        //   TEST 6: Drop index on a non-existent column "director" (should fail)
+        out.println("\nTEST 6: Dropping index on 'director' (should FAIL - index does not exist)");
+        dropped = movie.dropIndex("director");
+        out.println("Drop status: " + (dropped ? "Success" : "Failed"));
+    }
 } // MovieDB
 
