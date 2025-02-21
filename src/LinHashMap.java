@@ -51,8 +51,8 @@ public class LinHashMap <K, V>
     private class Bucket
     {
         int    keys;                                                         // number of active keys
-        K []   key;                                                          // array of keys
-        V []   value;                                                        // array of values
+        K []   key;                                                           // array of keys
+        V []   value;                                                       // array of values
         Bucket next;                                                         // link to next bucket in chain
 
         @SuppressWarnings("unchecked")

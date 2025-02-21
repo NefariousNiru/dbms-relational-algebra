@@ -52,10 +52,21 @@ public class KeyType
     @SuppressWarnings("unchecked")
     public int compareTo (KeyType k)
     {
-        for (var i = 0; i < key.length; i++) {
-            if (key [i].compareTo (k.key [i]) < 0) return -1;
-            if (key [i].compareTo (k.key [i]) > 0) return 1;
-        } // for
+        for (int i = 0; i < key.length; i++) {
+            Comparable<?> thisKey = key[i];
+            Comparable<?> otherKey = k.key[i];
+
+            // If types mismatch, just return non-zero (i.e., treat them as different)
+            if (!thisKey.getClass().equals(otherKey.getClass())) {
+                System.out.println("DEBUG: Type mismatch -> " + thisKey + " (" + thisKey.getClass().getSimpleName() +
+                        ") vs " + otherKey + " (" + otherKey.getClass().getSimpleName() + ")");
+                return -1;  // Or return 1, but avoid 0 (equality)
+            }
+
+            int cmp = ((Comparable) thisKey).compareTo(otherKey);
+            System.out.println("DEBUG: Comparing " + thisKey + " with " + otherKey + " -> " + cmp);
+            if (cmp != 0) return cmp;
+        }
         return 0;
     } // compareTo
 
