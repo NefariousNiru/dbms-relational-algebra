@@ -527,26 +527,47 @@ public class Table
      */
     public Table minus (Table table2)
     {
-        out.println ("RA> " + name + ".minus (" + table2.name + ")");
-        if (! compatible (table2)) return null;
+        try {
+            out.println ("RA> " + name + ".minus (" + table2.name + ")");
 
-        List <Comparable []> rows = new ArrayList <> ();
+            // 1. Schema Check: Ensure both tables have the same structure
+            if (!Arrays.equals(attribute, table2.attribute)) {
+                throw new IllegalArgumentException("Schemas do not match. MINUS operation aborted.");
+            }
 
-        // Add rows from 'this' table that are not in 'table2'.
-        for (var row : tuples) {
-            boolean found = false;
-            for (var otherRow : table2.tuples) {
-                if (Arrays.equals(row, otherRow)) {
-                    found = true;
-                    break;
+            // 2. Handle Empty Tables
+            if (this.tuples.isEmpty()) {
+                out.println("Table " + this.name + " is empty. Returning an empty result.");
+                return new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
+            }
+            if (table2.tuples.isEmpty()) {
+                out.println("Table " + table2.name + " is empty. Returning original table.");
+                return this;
+            }
+
+            // 3. Create the Result Table
+            Table result = new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
+
+            // 4. Convert table2 tuples to a HashSet for fast lookup
+            Set<List<Comparable>> sSet = new HashSet<>();
+            for (Comparable[] tuple : table2.tuples) {
+                sSet.add(Arrays.asList(tuple)); // Store tuple as a list for proper comparison
+            }
+
+            // 5. Add Tuples from R that are NOT in S (Checking Full Row Using Arrays.equals)
+            for (Comparable[] tuple : this.tuples) {
+                if (!sSet.contains(Arrays.asList(tuple))) {  // Properly check full row match
+                    result.tuples.add(tuple);
                 }
             }
-            if (!found) {
-                rows.add(row);
-            }
-        }
 
-        return new Table (name + count++, attribute, domain, key, rows);
+            return result;
+
+        } catch (Exception e) {
+            out.println("Error in MINUS operation: " + e.getMessage());
+            e.printStackTrace();
+            return null; // Return null if operation fails
+        }
     } // minus
 
     /************************************************************************************
@@ -1054,6 +1075,33 @@ public class Table
 
         return obj;
     } // extractDom
+
+    /**
+     * Creates a deep copy of this Table.
+     * Copies the schema, all tuples, and rebuilds the primary index.
+     *
+     * @return a new Table object that is a deep copy of this Table.
+     */
+    public Table copy() {
+        // Create a new Table with the same schema (and a new name if desired)
+        Table copy = new Table(this.name + "_copy", this.attribute, this.domain, this.key);
+
+        // Deep copy each tuple
+        for (Comparable[] row : this.tuples) {
+            copy.tuples.add(Arrays.copyOf(row, row.length));
+        }
+
+        // Rebuild the primary index
+        for (Comparable[] row : copy.tuples) {
+            KeyType pk = copy.extractPrimaryKey(row);
+            copy.index.put(pk, row);
+        }
+
+        // (Optional) If you need to copy secondary indices, do it here.
+        // For now, we can leave secondaryIndices empty or rebuild them as needed.
+
+        return copy;
+    }
 
 } // Table
 
