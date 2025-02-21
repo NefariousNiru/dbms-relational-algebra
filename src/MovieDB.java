@@ -103,11 +103,9 @@ class MovieDB
         
         test_index_methods(movie);
 
-        //--------------------- project: title year
+        //--------------------- Test project
 
-        out.println ();
-        var t_project = movie.project ("title year");
-        t_project.print ();
+        test_indexed_project(movie, cinema, movieStar, starsIn, studio, movieExec);
 
         //--------------------- select: equals, &&
 
@@ -309,6 +307,60 @@ class MovieDB
         out.println("\nTEST 6: Dropping index on 'director' (should FAIL - index does not exist)");
         dropped = movie.dropIndex("director");
         out.println("Drop status: " + (dropped ? "Success" : "Failed"));
+    }
+
+    /*************************************************************************************
+     * Method for testing indexed select.
+     * @param * Required Tables
+     */
+    private static void test_indexed_project(Table movie, Table cinema, Table movieStar, Table starsIn, Table studio, Table movieExec) {
+        //--------------------- project: title
+
+        out.println ();
+        var t_project = movie.project ("title year");
+        t_project.print ();
+
+        //--------------------- project attrs: genre
+
+        out.println ();
+        var t_project2 = movie.project ("genre");
+        t_project2.print ();
+
+        //--------------------- project several attrs: title year genre
+
+        out.println ();
+        var t_project3 = cinema.project ("title year genre");
+        t_project3.print ();
+
+        //--------------------- project several attrs: name birthdate
+
+        out.println ();
+        var t_project4 = movieStar.project ("name birthdate");
+        t_project4.print ();
+
+        //--------------------- project several attrs: movieTitle starName
+
+        out.println ();
+        var t_project5 = starsIn.project ("movieTitle starName");
+        t_project5.print ();
+
+        //--------------------- project several attrs: name fee
+
+        out.println ();
+        var t_project6 = movieExec.project ("name fee");
+        t_project6.print ();
+
+        //--------------------- project several attrs: name fee
+
+        out.println ();
+        var t_project7 = studio.project ("name address");
+        t_project7.print ();
+
+        //--------------------- project non-exist attrs
+
+        out.println ();
+        var t_project8 = studio.project ("studioName");
+        t_project8.print ();
     }
 } // MovieDB
 
