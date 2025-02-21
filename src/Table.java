@@ -5,7 +5,7 @@
  * @author   John Miller
  *
  * compile javac *.java
- * run     java MovieDB    
+ * run     java MovieDB
  */
 
 
@@ -59,7 +59,7 @@ public class Table
      */
     private final List <Comparable []> tuples;
 
-    /** Primary key (the attributes forming). 
+    /** Primary key (the attributes forming).
      */
     private final String [] key;
 
@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.HASH_MAP;
+    private static final MapType mType = MapType.TREE_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
@@ -139,7 +139,7 @@ public class Table
      * @param _attribute  the string containing attributes names
      * @param _domain     the string containing attribute domains (data types)
      * @param _key        the primary key
-     */  
+     */
     public Table (String _name, String [] _attribute, Class [] _domain, String [] _key)
     {
         name      = _name;
@@ -160,7 +160,7 @@ public class Table
      * @param _domain     the string containing attribute domains (data types)
      * @param _key        the primary key
      * @param _tuples     the list of tuples containing the data
-     */  
+     */
     public Table (String _name, String [] _attribute, Class [] _domain, String [] _key,
                   List <Comparable []> _tuples)
     {
@@ -290,18 +290,24 @@ public class Table
     {
         out.println ("RA> " + name + ".project (" + attributes + ")");
         var attrs     = attributes.split (" ");
-        var colDomain = extractDom (match (attrs), domain);
+
+        if (attrs.length == 0)
+            throw new IllegalArgumentException("Empty attributes");
+
+        for (var attr : attrs) {
+            if (col(attr) == -1)
+                throw new IllegalArgumentException("Invalid attribute: " + attr);
+        }
+
+        var colDomain = extractDom (match(attrs), domain);
         var newKey    = (Arrays.asList (attrs).containsAll (Arrays.asList (key))) ? key : attrs;
 
-        List <Comparable []> rows = new ArrayList <> ();
-
-        for (var tuple : tuples) {
-            var newTuples = new Comparable[attrs.length]; //array that holds projected tuple
-            //find corresponding col for each attr and add it to newTuples
-            for (int i = 0; i < attrs.length; i++) {
-                newTuples[i] = tuple[col(attrs[i])];
-            }
-            rows.add(newTuples); //add newTuples into rows
+        // implemented
+        List<Comparable[]> rows = new ArrayList<>();
+        if (index != null) {
+            index.values().stream().map(row -> extract(row, attrs)).forEach(rows::add);
+        } else {
+            tuples.stream().map(row -> extract(row, attrs)).forEach(rows::add);
         }
 
         return new Table (name + count++, attrs, colDomain, newKey, rows);
@@ -815,27 +821,29 @@ public class Table
         }
 
         KeyType primaryKey = extractPrimaryKey(tup);
-        if (index.containsKey(primaryKey)) {
+        if (index != null && index.containsKey(primaryKey)) {
             throw new IllegalArgumentException("Duplicate primary key: " + primaryKey);
         }
 
         tuples.add(tup);
 
-        if (mType != MapType.NO_MAP) {
+        if (index != null) {
             index.put(primaryKey, tup);
         }
 
-        for (var entry : secondaryIndices.entrySet()) {
-            String columnName = entry.getKey();  // The column being indexed
-            Map<Comparable, List<Comparable[]>> columnIndex = entry.getValue();  // The index map for that column
+        if (index != null && !secondaryIndices.isEmpty()) {
+            for (var entry : secondaryIndices.entrySet()) {
+                String columnName = entry.getKey();
+                Map<Comparable, List<Comparable[]>> columnIndex = entry.getValue();
 
-            int colIdx = col(columnName);
-            if (colIdx == -1) {
-                throw new IllegalStateException("Column " + columnName + " is indexed but does not exist in table " + name);
+                int colIdx = col(columnName);
+                if (colIdx == -1) {
+                    throw new IllegalStateException("Column " + columnName + " is indexed but does not exist in table " + name);
+                }
+
+                Comparable key = tup[colIdx];
+                columnIndex.computeIfAbsent(key, k -> new ArrayList<>()).add(tup);
             }
-
-            Comparable key = tup[colIdx];  // Get the value of the indexed column
-            columnIndex.computeIfAbsent(key, k -> new ArrayList<>()).add(tup);  // Add the tuple to the index
         }
 
         return tuples.size() - 1;
@@ -910,7 +918,7 @@ public class Table
     } // printIndex
 
     /************************************************************************************
-     * Load the table with the given name into memory. 
+     * Load the table with the given name into memory.
      *
      * @param name  the name of the table to load
      */
@@ -1001,7 +1009,7 @@ public class Table
      *
      * @param t       the tuple to extract from
      * @param column  the array of column names
-     * @return  a smaller tuple extracted from tuple t 
+     * @return  a smaller tuple extracted from tuple t
      */
     private Comparable [] extract (Comparable [] t, String [] column)
     {
@@ -1013,7 +1021,7 @@ public class Table
 
     /************************************************************************************
      * Check the size of the tuple (number of elements in array) as well as the type of
-     * each value to ensure it is from the right domain. 
+     * each value to ensure it is from the right domain.
      *
      * @param t  the tuple as a array of attribute values
      * @return  whether the tuple has the right size and values that comply

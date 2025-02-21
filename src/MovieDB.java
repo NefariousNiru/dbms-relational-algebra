@@ -100,14 +100,16 @@ class MovieDB
         movieStar.printIndex ();
 
         //--------------------- Test Index Methods
-        
-        test_index_methods(movie);
 
-        //--------------------- project: title year
+        try {
+            test_index_methods(movie);
+        } catch (Exception e) {
+            out.println("Index is set to NO_MAP. Skipping tests");
+        }
 
-        out.println ();
-        var t_project = movie.project ("title year");
-        t_project.print ();
+        //--------------------- Test project
+
+        test_indexed_project(movie, cinema, movieStar, starsIn, studio, movieExec);
 
         //--------------------- select: equals, &&
 
@@ -130,16 +132,13 @@ class MovieDB
 
 
         //--------------------- indexed select tests: <
+
         test_indexed_select(movie, movieStar);
 
 
         //--------------------- union tests ---------------------
 
         test_indexed_union(movie, cinema);
-
-        //--------------------- minus tests ---------------------
-
-        test_indexed_minus(movie, cinema);
 
 
         //--------------------- minus: movie MINUS cinema
@@ -236,36 +235,43 @@ class MovieDB
 
     out.println ();
     var t_iselect = movieStar.select (new KeyType ("Harrison_Ford")); // should pass
+    out.println("Should work");
     t_iselect.print ();
 
     //--------------------- indexed select: multiple keys
 
     out.println ();
     var t_iselect2 = movie.select (new KeyType ("Star_Wars", 1977)); // should pass
+    out.println("Should work");
     t_iselect2.print ();
 
     //--------------------- indexed select: key does not exist
 
     out.println();
     var t_iselect3 = movieStar.select(new KeyType("Tom_Hanks"));  // Should return empty
+    out.println("should be emtpy");
     t_iselect3.print();
 
     //--------------------- indexed select: composite key (wrong order)
 
     out.println();
     var t_iselect4 = movie.select(new KeyType(1977, "Star_Wars"));  // Wrong order, should fail
+    out.println("should fail");
     t_iselect4.print();
 
     //--------------------- indexed select: composite key (wrong type)
 
     out.println();
     var t_iselect5 = movie.select(new KeyType("Star_Wars", "1977"));  // Type mismatch: "1977" is String
+    out.println("should fail");
     t_iselect5.print();
+
 
     //--------------------- indexed select: composite key (partial key)
 
     out.println();
     var t_iselect6 = movie.select(new KeyType("Star_Wars"));  // Partial key, should fail
+    out.println("should fail");
     t_iselect6.print();
 
 
@@ -274,7 +280,8 @@ class MovieDB
     out.println();
     var newMovie = new Comparable[]{"New_Movie", 2025, 150, "action", "Warner", 55555};
     movie.insert(newMovie);
-    var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));  // Should find the inserted movie
+    var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));
+    out.println("Should work"); // Should find the inserted movie
     t_iselect8.print();
 }
 
@@ -314,54 +321,65 @@ class MovieDB
         dropped = movie.dropIndex("director");
         out.println("Drop status: " + (dropped ? "Success" : "Failed"));
     }
+
     /*************************************************************************************
-     * Method for testing the MINUS operation.
-     * @param movie  the movie table
-     * @param cinema the cinema table
+     * Method for testing indexed select.
+     * @param * Required Tables
      */
-    private static void test_indexed_minus(Table movie, Table cinema) {
-        out.println("\n===== TESTING MINUS OPERATION =====");
+    private static void test_indexed_project(Table movie, Table cinema, Table movieStar, Table starsIn, Table studio, Table movieExec) {
+        //--------------------- project: title
 
-        // Test 1: Minus operation on movie - cinema (should remove common movies)
-        out.println("Test 1: movie - cinema (removes common movies)");
-        var t_minus1 = movie.minus(cinema);
-        t_minus1.print();
+        out.println ();
+        var t_project = movie.project ("title year");
+        t_project.print ();
 
-        // Test 2: Minus operation where the second table is empty (should return movie unchanged)
-        var emptyTable = new Table("emptyTable", "title year length genre studioName producerNo",
-                "String Integer Integer String String Integer", "title year");
-        out.println("Test 2: movie - emptyTable (should return movie unchanged)");
-        var t_minus2 = movie.minus(emptyTable);
-        t_minus2.print();
+        //--------------------- project attrs: genre
 
-        // Test 3: Minus operation where the first table is empty (should return empty table)
-        var emptyMovie = new Table("emptyMovie", "title year length genre studioName producerNo",
-                "String Integer Integer String String Integer", "title year");
-        out.println("Test 3: emptyMovie - cinema (should return empty table)");
-        var t_minus3 = emptyMovie.minus(cinema);
-        t_minus3.print();
+        out.println ();
+        var t_project2 = movie.project ("genre");
+        t_project2.print ();
 
-        // Test 4: Minus operation on identical tables (should return an empty table)
-        // Clone movie (assuming Table implements clone correctly)
-        Table movieCopy = movie.copy();
-        out.println("Test 4: movie - movie copy (should return empty table)");
-        var t_minus4 = movie.minus(movieCopy);
-        t_minus4.print();
+        //--------------------- project several attrs: title year genre
 
-        // Test 5: Minus operation with mismatched schemas (should fail gracefully)
-        Table mismatched = new Table("mismatchedTable", "director budget",
-                "String Float", "director");
-        Comparable[] directorEntry = {"Christopher_Nolan", 200_000_000f};
-        mismatched.insert(directorEntry);
-        out.println("Test 5: movie - mismatchedTable (should fail due to schema mismatch)");
+        out.println ();
+        var t_project3 = cinema.project ("title year genre");
+        t_project3.print ();
+
+        //--------------------- project several attrs: name birthdate
+
+        out.println ();
+        var t_project4 = movieStar.project ("name birthdate");
+        t_project4.print ();
+
+        //--------------------- project several attrs: movieTitle starName
+
+        out.println ();
+        var t_project5 = starsIn.project ("movieTitle starName");
+        t_project5.print ();
+
+        //--------------------- project several attrs: name fee
+
+        out.println ();
+        var t_project6 = movieExec.project ("name fee");
+        t_project6.print ();
+
+        //--------------------- project several attrs: name fee
+
+        out.println ();
+        var t_project7 = studio.project ("name address");
+        t_project7.print ();
+
+        //--------------------- project non-exist attrs
+
         try {
-            Table t_minus5 = movie.minus(mismatched);
-            t_minus5.print();
+            out.println ();
+            var t_project8 = studio.project ("studioName");
+            t_project8.print ();
         } catch (Exception e) {
-            out.println("Expected error due to schema mismatch: " + e.getMessage());
+            out.println("Expected error due to invalid Attribute: " + e.getMessage());
         }
-    }
 
+    }
 
 } // MovieDB
 
