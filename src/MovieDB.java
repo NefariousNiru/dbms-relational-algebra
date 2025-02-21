@@ -99,6 +99,10 @@ class MovieDB
 
         movieStar.printIndex ();
 
+        //--------------------- Test Index Methods
+        
+        test_index_methods(movie);
+
         //--------------------- project: title year
 
         out.println ();
@@ -129,11 +133,10 @@ class MovieDB
         test_indexed_select(movie, movieStar);
 
 
-        //--------------------- union: movie UNION cinema
+        //--------------------- union tests ---------------------
 
-        out.println ();
-        var t_union = movie.union (cinema);
-        t_union.print ();
+        test_indexed_union(movie, cinema);
+
 
         //--------------------- minus: movie MINUS cinema
 
@@ -163,9 +166,68 @@ class MovieDB
     /*************************************************************************************
      * Method for testing indexed select.
      * @param movie  the movie table
+     * @param cinema the cinema table
+     */
+    private static void test_indexed_union(Table movie, Table cinema) {
+        // Test 1: Union of two non-empty tables with some common elements
+        out.println("Test 1: Union of movie and cinema (overlapping rows)");
+        var t_union1 = movie.union(cinema);
+        t_union1.print();
+
+        // Test 2: Union of two non-empty tables with no common elements
+        var uniqueTable = new Table("uniqueTable", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+
+        var uniqueFilm = new Comparable[] { "Inception", 2010, 148, "sciFi", "WarnerBros", 56789 };
+        uniqueTable.insert(uniqueFilm);
+
+        out.println("Test 2: Union of movie and uniqueTable (no common elements)");
+        var t_union2 = movie.union(uniqueTable);
+        t_union2.print();
+
+        // Test 3: Union of a table with itself (should return the same table)
+        out.println("Test 3: Union of movie with itself (idempotency test)");
+        var t_union3 = movie.union(movie);
+        t_union3.print();
+
+        // Test 4: Union with an empty table (should return the original table)
+        var emptyTable = new Table("emptyTable", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+
+        out.println("Test 4: Union of movie with an empty table (identity test)");
+        var t_union4 = movie.union(emptyTable);
+        t_union4.print();
+
+        // Test 5: Union of two empty tables (should return an empty table)
+        var anotherEmptyTable = new Table("anotherEmptyTable", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+
+        out.println("Test 5: Union of two empty tables (empty result test)");
+        var t_union5 = emptyTable.union(anotherEmptyTable);
+        t_union5.print();
+
+        // Test 6: Union of tables with different schemas (should fail or handle gracefully)
+        var mismatchedTable = new Table("mismatchedTable", "director budget",
+                "String Float", "director");
+
+        var directorEntry = new Comparable[] { "Christopher_Nolan", 200_000_000f };
+        mismatchedTable.insert(directorEntry);
+
+        out.println("Test 6: Union of movie and mismatchedTable (schema mismatch)");
+        try {
+            var t_union6 = movie.union(mismatchedTable);
+            t_union6.print();
+        } catch (Exception e) {
+            out.println("Expected error due to schema mismatch: " + e.getMessage());
+        }
+    }
+
+    /*************************************************************************************
+     * Method for testing indexed select.
+     * @param movie  the movie table
      * @param movieStar the movieStar table
      */
-    public static void test_indexed_select(Table movie, Table movieStar) {
+    private static void test_indexed_select(Table movie, Table movieStar) {
     //--------------------- indexed select: key
 
     out.println ();
@@ -211,5 +273,42 @@ class MovieDB
     var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));  // Should find the inserted movie
     t_iselect8.print();
 }
+
+    /*************************************************************************************
+     * Method for testing indexed select.
+     * @param movie  the movie table
+     */
+    private static void test_index_methods(Table movie) {
+        out.println("\nTEST 1: Creating index on 'genre' (should work)");
+        movie.createIndex("genre");
+
+        //   TEST 2: Create a unique index on "year" (should work) all unique vals
+        out.println("\nTEST 2: Creating UNIQUE index on 'year' (should work)");
+        movie.createUniqueIndex("year");
+
+        
+        // TEST 3: Attempt to create a unique index on "genre" (should fail due to duplicates)
+        try {
+            out.println("\nTEST 3: Creating UNIQUE index on 'genre' (should FAIL)");
+            movie.createUniqueIndex("genre");  // This should throw an error
+        } catch (IllegalArgumentException e) {
+            out.println("Expected error: " + e.getMessage());
+        }
+
+        //   TEST 4: Drop index on "genre" (should remove index)
+        out.println("\nTEST 4: Dropping index on 'genre' (should work)");
+        boolean dropped = movie.dropIndex("genre");
+        out.println("Drop status: " + (dropped ? "Success" : "Failed"));
+
+        //   TEST 5: Drop index on "studioName" (should remove index)
+        out.println("\nTEST 5: Dropping index on 'studioName' (should work)");
+        dropped = movie.dropIndex("studioName");
+        out.println("Drop status: " + (dropped ? "Success" : "Failed"));
+
+        //   TEST 6: Drop index on a non-existent column "director" (should fail)
+        out.println("\nTEST 6: Dropping index on 'director' (should FAIL - index does not exist)");
+        dropped = movie.dropIndex("director");
+        out.println("Drop status: " + (dropped ? "Success" : "Failed"));
+    }
 } // MovieDB
 
