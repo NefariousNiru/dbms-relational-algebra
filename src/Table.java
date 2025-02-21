@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.HASH_MAP;
+    private static final MapType mType = MapType.TREE_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
@@ -304,7 +304,11 @@ public class Table
 
         // implemented
         List<Comparable[]> rows = new ArrayList<>();
-        index.values().stream().map(row -> extract(row, attrs)).forEach(rows::add);
+        if (index != null) {
+            index.values().stream().map(row -> extract(row, attrs)).forEach(rows::add);
+        } else {
+            tuples.stream().map(row -> extract(row, attrs)).forEach(rows::add);
+        }
 
         return new Table (name + count++, attrs, colDomain, newKey, rows);
     } // project
@@ -796,27 +800,29 @@ public class Table
         }
 
         KeyType primaryKey = extractPrimaryKey(tup);
-        if (index.containsKey(primaryKey)) {
+        if (index != null && index.containsKey(primaryKey)) {
             throw new IllegalArgumentException("Duplicate primary key: " + primaryKey);
         }
 
         tuples.add(tup);
 
-        if (mType != MapType.NO_MAP) {
+        if (index != null) {
             index.put(primaryKey, tup);
         }
 
-        for (var entry : secondaryIndices.entrySet()) {
-            String columnName = entry.getKey();  // The column being indexed
-            Map<Comparable, List<Comparable[]>> columnIndex = entry.getValue();  // The index map for that column
+        if (index != null && !secondaryIndices.isEmpty()) {
+            for (var entry : secondaryIndices.entrySet()) {
+                String columnName = entry.getKey();
+                Map<Comparable, List<Comparable[]>> columnIndex = entry.getValue();
 
-            int colIdx = col(columnName);
-            if (colIdx == -1) {
-                throw new IllegalStateException("Column " + columnName + " is indexed but does not exist in table " + name);
+                int colIdx = col(columnName);
+                if (colIdx == -1) {
+                    throw new IllegalStateException("Column " + columnName + " is indexed but does not exist in table " + name);
+                }
+
+                Comparable key = tup[colIdx];
+                columnIndex.computeIfAbsent(key, k -> new ArrayList<>()).add(tup);
             }
-
-            Comparable key = tup[colIdx];  // Get the value of the indexed column
-            columnIndex.computeIfAbsent(key, k -> new ArrayList<>()).add(tup);  // Add the tuple to the index
         }
 
         return tuples.size() - 1;

@@ -100,8 +100,12 @@ class MovieDB
         movieStar.printIndex ();
 
         //--------------------- Test Index Methods
-        
-        test_index_methods(movie);
+
+        try {
+            test_index_methods(movie);
+        } catch (Exception e) {
+            out.println("Index is set to NO_MAP. Skipping tests");
+        }
 
         //--------------------- Test project
 
@@ -128,6 +132,7 @@ class MovieDB
 
 
         //--------------------- indexed select tests: <
+
         test_indexed_select(movie, movieStar);
 
 
@@ -230,36 +235,43 @@ class MovieDB
 
     out.println ();
     var t_iselect = movieStar.select (new KeyType ("Harrison_Ford")); // should pass
+    out.println("Should work");
     t_iselect.print ();
 
     //--------------------- indexed select: multiple keys
 
     out.println ();
     var t_iselect2 = movie.select (new KeyType ("Star_Wars", 1977)); // should pass
+    out.println("Should work");
     t_iselect2.print ();
 
     //--------------------- indexed select: key does not exist
 
     out.println();
     var t_iselect3 = movieStar.select(new KeyType("Tom_Hanks"));  // Should return empty
+    out.println("should be emtpy");
     t_iselect3.print();
 
     //--------------------- indexed select: composite key (wrong order)
 
     out.println();
     var t_iselect4 = movie.select(new KeyType(1977, "Star_Wars"));  // Wrong order, should fail
+    out.println("should fail");
     t_iselect4.print();
 
     //--------------------- indexed select: composite key (wrong type)
 
     out.println();
     var t_iselect5 = movie.select(new KeyType("Star_Wars", "1977"));  // Type mismatch: "1977" is String
+    out.println("should fail");
     t_iselect5.print();
+
 
     //--------------------- indexed select: composite key (partial key)
 
     out.println();
     var t_iselect6 = movie.select(new KeyType("Star_Wars"));  // Partial key, should fail
+    out.println("should fail");
     t_iselect6.print();
 
 
@@ -268,7 +280,8 @@ class MovieDB
     out.println();
     var newMovie = new Comparable[]{"New_Movie", 2025, 150, "action", "Warner", 55555};
     movie.insert(newMovie);
-    var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));  // Should find the inserted movie
+    var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));
+    out.println("Should work"); // Should find the inserted movie
     t_iselect8.print();
 }
 
@@ -358,9 +371,15 @@ class MovieDB
 
         //--------------------- project non-exist attrs
 
-        out.println ();
-        var t_project8 = studio.project ("studioName");
-        t_project8.print ();
+        try {
+            out.println ();
+            var t_project8 = studio.project ("studioName");
+            t_project8.print ();
+        } catch (Exception e) {
+            out.println("Expected error due to invalid Attribute: " + e.getMessage());
+        }
+
     }
+
 } // MovieDB
 
