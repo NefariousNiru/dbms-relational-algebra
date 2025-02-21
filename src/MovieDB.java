@@ -140,6 +140,8 @@ class MovieDB
 
         test_indexed_union(movie, cinema);
 
+        //--------------------- minus tests ---------------------
+        test_indexed_minus(movie, cinema);
 
         //--------------------- minus: movie MINUS cinema
 
@@ -321,6 +323,60 @@ class MovieDB
         dropped = movie.dropIndex("director");
         out.println("Drop status: " + (dropped ? "Success" : "Failed"));
     }
+
+    /*************************************************************************************
+     * Method for testing the MINUS operation.
+     * This test covers several scenarios:
+     *  - Removing common tuples between two tables (Expected: PASS)
+     *  - Minus with an empty table (should return the original table) (Expected: PASS)
+     *  - Minus when the first table is empty (should return an empty table) (Expected: EMPTY TUPLE)
+     *  - Minus on identical tables (should return an empty table) (Expected: EMPTY TUPLE)
+     *  - Minus with mismatched schemas (should fail gracefully) (Expected: FAIL)
+     *************************************************************************************/
+    private static void test_indexed_minus(Table movie, Table cinema) {
+        out.println("\n===== TESTING MINUS OPERATION =====");
+
+        // Test 1: Minus operation on movie - cinema (removes common movies)
+        out.println("Test 1: movie - cinema (Expected: PASS)");
+        var t_minus1 = movie.minus(cinema);
+        t_minus1.print();
+
+        // Test 2: Minus operation where the second table is empty
+        // (should return original table) - Expected: PASS (original table printed)
+        var emptyTable = new Table("emptyTable", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+        out.println("Test 2: movie - emptyTable (Expected: PASS - original table remains)");
+        var t_minus2 = movie.minus(emptyTable);
+        t_minus2.print();
+
+        // Test 3: Minus operation where the first table is empty
+        // (should return an empty table) - Expected: EMPTY TUPLE
+        var emptyMovie = new Table("emptyMovie", "title year length genre studioName producerNo",
+                "String Integer Integer String String Integer", "title year");
+        out.println("Test 3: emptyMovie - cinema (Expected: EMPTY TUPLE)");
+        var t_minus3 = emptyMovie.minus(cinema);
+        t_minus3.print();
+
+        // Test 4: Minus operation on identical tables (should return an empty table)
+        // We now use the copy() method to create a duplicate of movie.
+        Table movieCopy = movie.copy();
+        out.println("Test 4: movie - movie copy (Expected: EMPTY TUPLE)");
+        var t_minus4 = movie.minus(movieCopy);
+        t_minus4.print();
+
+        // Test 5: Minus operation with mismatched schemas (should fail gracefully)
+        Table mismatched = new Table("mismatchedTable", "director budget", "String Float", "director");
+        Comparable[] directorEntry = {"Christopher_Nolan", 200_000_000f};
+        mismatched.insert(directorEntry);
+        out.println("Test 5: movie - mismatchedTable (Expected: FAIL due to schema mismatch)");
+        try {
+            Table t_minus5 = movie.minus(mismatched);
+            t_minus5.print();
+        } catch (Exception e) {
+            out.println("Expected error: " + e.getMessage());
+        }
+    }
+
 
     /*************************************************************************************
      * Method for testing indexed select.
