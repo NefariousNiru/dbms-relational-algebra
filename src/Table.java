@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.TREE_MAP;
+    private static final MapType mType = MapType.LINHASH_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
@@ -89,7 +89,7 @@ public class Table
         case TREE_MAP    -> new TreeMap <> ();
         case HASH_MAP    -> new HashMap <> ();
 //        Use in Project 2
-//        case LINHASH_MAP -> new LinHashMap <> (KeyType.class, Comparable [].class);
+        case LINHASH_MAP -> new LinHashMap <> (KeyType.class, Comparable [].class);
 //        case BPTREE_MAP  -> new BpTreeMap <> (KeyType.class, Comparable [].class);
         default          -> null;
         }; // switch
@@ -106,7 +106,7 @@ public class Table
         return switch (mType) {
             case TREE_MAP    -> new TreeMap<>();
             case HASH_MAP    -> new HashMap<>();
-//        case LINHASH_MAP -> new LinHashMap <> (KeyType.class, Comparable [].class);
+            case LINHASH_MAP -> new LinHashMap <>(Comparable.class, (Class<List<Comparable[]>>)(Class<?>)ArrayList.class);
 //        case BPTREE_MAP  -> new BpTreeMap <> (KeyType.class, Comparable [].class);
             default          -> throw new IllegalArgumentException("Unsupported index type: " + mType);
         };
@@ -300,15 +300,28 @@ public class Table
         }
 
         var colDomain = extractDom (match(attrs), domain);
-        var newKey    = (Arrays.asList (attrs).containsAll (Arrays.asList (key))) ? key : attrs;
+        Set<String> keySet = new HashSet<>(Arrays.asList(key));
+        boolean isKeySubset = keySet.containsAll(Arrays.asList(attrs)); // Optimized check
 
-        // implemented
-        List<Comparable[]> rows = new ArrayList<>();
+        var newKey = isKeySubset ? key : attrs;
+
+        Set<List<Comparable>> uniqueRows = new HashSet<>();
+
         if (index != null) {
-            index.values().stream().map(row -> extract(row, attrs)).forEach(rows::add);
+            index.values().stream()
+                    .map(row -> Arrays.asList(extract(row, attrs))) // Convert to List for proper equality checks
+                    .forEach(uniqueRows::add);
         } else {
-            tuples.stream().map(row -> extract(row, attrs)).forEach(rows::add);
+            tuples.stream()
+                    .map(row -> Arrays.asList(extract(row, attrs))) // Convert to List for proper equality checks
+                    .forEach(uniqueRows::add);
         }
+
+        // Convert Set back to List<Comparable[]> for Table creation
+        List<Comparable[]> rows = uniqueRows.stream()
+                .map(list -> list.toArray(new Comparable[0]))
+                .collect(Collectors.toList());
+
 
         return new Table (name + count++, attrs, colDomain, newKey, rows);
     } // project
@@ -435,18 +448,31 @@ public class Table
      */
     public Table select (KeyType keyVal)
     {
-        out.println ("RA> " + name + ".select (" + keyVal + ")");
+        out.println("RA> " + name + ".select (" + keyVal + ")");
 
-        List <Comparable []> rows = new ArrayList <> ();
+        List<Comparable[]> rows = new ArrayList<>();
 
-        // Checks if index is not null and index contains the key
+        // Use `getKey()` to access key array properly.
+        Comparable[] keyArray = keyVal.getKey();
+
+        // Check primary index first
         if (index != null && index.containsKey(keyVal)) {
-            rows.add(index.get(keyVal));                               // O(1) Lookup and append
-        } else {
-            out.println("INFO: No matching record found for key: " + keyVal);
+            rows.add(index.get(keyVal));  // O(1) lookup
+            return new Table(name + count++, attribute, domain, key, rows);
         }
 
-        return new Table (name + count++, attribute, domain, key, rows);
+        // Check secondary indices
+        for (Map.Entry<String, Map<Comparable, List<Comparable[]>>> entry : secondaryIndices.entrySet()) {
+            String column = entry.getKey();
+            Map<Comparable, List<Comparable[]>> secIndex = entry.getValue();
+            if (keyArray.length > 0 && secIndex.containsKey(keyArray[0])) {  // Match first key component
+                rows.addAll(secIndex.get(keyArray[0]));  // Use indexed lookup
+                return new Table(name + count++, attribute, domain, key, rows);
+            }
+        }
+
+        out.println("INFO: No matching record found for key: " + keyVal);
+        return new Table(name + count++, attribute, domain, key, rows);
     } // select
 
     /************************************************************************************
@@ -535,12 +561,12 @@ public class Table
     {
         out.println ("RA> " + name + ".minus (" + table2.name + ")");
 
-        // 1. Schema Check: Ensure both tables have the same structure
+        // Schema Check: Ensure both tables have the same structure
         if (!Arrays.equals(attribute, table2.attribute)) {
             throw new IllegalArgumentException("Schemas do not match. MINUS operation aborted.");
         }
 
-        // 2. Handle Empty Tables
+        // Handle Empty Tables
         if (this.tuples.isEmpty()) {
             out.println("Table " + this.name + " is empty. Returning an empty result.");
             return new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
@@ -550,19 +576,33 @@ public class Table
             return this;
         }
 
-        // 3. Create the Result Table
+        // Create the Result Table
         Table result = new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
 
-        // 4. Convert table2 tuples to a HashSet for fast lookup
-        Set<Comparable[]> sSet = new HashSet<>();
-        for (Comparable[] tuple : table2.tuples) {
-            sSet.add(tuple); // Store tuple as a list for proper comparison
+        // Use HashSet for Fast Lookup if Table2 has no index
+        Set<KeyType> sSet = new HashSet<>();
+        if (table2.index != null) {
+            sSet.addAll(table2.index.keySet()); // Use the indexed primary keys
+        } else {
+            for (Comparable[] tuple : table2.tuples) {
+                sSet.add(extractPrimaryKey(tuple));
+            }
         }
 
-        // 5. Add Tuples from R that are NOT in S (Checking Full Row Using Arrays.equals)
-        for (Comparable[] tuple : this.tuples) {
-            if (!sSet.contains(tuple)) {  // Properly check full row match
-                result.tuples.add(tuple);
+        // Filter tuples in R that are NOT in S
+        if (index != null) {
+            for (var entry : index.entrySet()) {
+                if (!sSet.contains(entry.getKey())) { // O(1) lookup
+                    result.index.put(entry.getKey(), entry.getValue());
+                    result.tuples.add(entry.getValue());
+                }
+            }
+        } else {
+            for (Comparable[] tuple : this.tuples) {
+                KeyType key = extractPrimaryKey(tuple);
+                if (!sSet.contains(key)) { // O(1) lookup
+                    result.tuples.add(tuple);
+                }
             }
         }
 
@@ -699,13 +739,89 @@ public class Table
      * @param table2       the rhs table in the join operation
      * @return  a table with tuples satisfying the equality predicate
      */
-    public Table i_join (String attributes1, String attributes2, Table table2)
-    {
-        //  T O   B E   I M P L E M E N T E D  - Project 2
+    public Table i_join (String attributes1, String attributes2, Table table2) {
+        out.println("RA> " + name + ".i_join (" + attributes1 + ", " + attributes2 + ", " + table2.name + ")");
 
-        return null;
+        var t_attrs = attributes1.split(" ");
+        var u_attrs = attributes2.split(" ");
 
-    } // i_join
+        if (t_attrs.length != u_attrs.length) {
+            throw new IllegalArgumentException("Number of attributes in attributes1 and attributes2 must match.");
+        }
+
+        // Validate attributes and ensure schema matches
+        int[] t_indices = new int[t_attrs.length];
+        int[] u_indices = new int[u_attrs.length];
+
+        for (int i = 0; i < t_attrs.length; i++) {
+            t_indices[i] = col(t_attrs[i]);
+            u_indices[i] = table2.col(u_attrs[i]);
+
+            if (t_indices[i] == -1 || u_indices[i] == -1) {
+                throw new IllegalArgumentException("Invalid attributes in join condition.");
+            }
+
+            // Schema validation
+            if (!domain[t_indices[i]].equals(table2.domain[u_indices[i]])) {
+                throw new IllegalArgumentException("Schema mismatch: Cannot join attributes with different types.");
+            }
+        }
+
+        // SELECT BEST INDEX
+        Map<Comparable, List<Comparable[]>> lookupMap = null;
+        boolean usingPrimaryIndex = false;
+
+        if (t_attrs.length == table2.key.length && Arrays.equals(u_attrs, table2.key) && table2.index != null) {
+            // If attributes2 is the primary key → Use PRIMARY INDEX
+            lookupMap = new HashMap<>();
+            usingPrimaryIndex = true;
+            out.println("DEBUG: Using PRIMARY INDEX on `" + String.join(", ", u_attrs) + "`.");
+
+            for (var entry : table2.index.entrySet()) {
+                lookupMap.put(entry.getKey(), new ArrayList<>(Collections.singletonList(entry.getValue())));
+            }
+        } else if (table2.secondaryIndices.containsKey(u_attrs[0])) {
+            // If secondary index exists → Use SECONDARY INDEX
+            lookupMap = table2.secondaryIndices.get(u_attrs[0]);
+            out.println("DEBUG: Using SECONDARY INDEX on `" + u_attrs[0] + "`.");
+        } else {
+            // No index - Do a non indexed join
+            out.println("INFO: No index found for join, falling back to nested loop join.");
+            return join(attributes1, attributes2, table2);
+        }
+
+        // PERFORM INDEXED JOIN
+        List<Comparable[]> rows = new ArrayList<>();
+
+        for (var thisRow : this.tuples) {
+            Comparable key;
+            if (usingPrimaryIndex) {
+                key = new KeyType(Arrays.stream(t_indices).mapToObj(i -> thisRow[i]).toArray(Comparable[]::new));
+            } else {
+                key = thisRow[t_indices[0]];
+            }
+
+            if (lookupMap.containsKey(key)) {
+                for (var matchingRow : lookupMap.get(key)) {
+                    var newRow = concat(thisRow, matchingRow);
+                    rows.add(newRow);
+                }
+            }
+        }
+
+        var newAttributes = new ArrayList<>(Arrays.asList(attribute));
+        for (String attr : table2.attribute) {
+            if (newAttributes.contains(attr)) {
+                newAttributes.add(attr + "2");
+            } else {
+                newAttributes.add(attr);
+            }
+        }
+
+        return new Table(name + count++, newAttributes.toArray(new String[0]),
+                concat(domain, table2.domain), key, rows);
+    }
+ // i_join
 
     /************************************************************************************
      * Join this table and table2 by performing an NATURAL JOIN.  Tuples from both tables
@@ -796,6 +912,13 @@ public class Table
 
         return -1;       // -1 => not found
     } // col
+
+    /************************************************************************************
+     * Check is a table is Empty
+     */
+    public boolean isEmpty() {
+        return this.tuples.size() == 0;
+    }
 
     /************************************************************************************
      * Insert a tuple to the table.
@@ -1076,6 +1199,7 @@ public class Table
 
         return obj;
     } // extractDom
+
 
 } // Table
 

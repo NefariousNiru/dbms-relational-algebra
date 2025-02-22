@@ -162,6 +162,11 @@ class MovieDB
         var t_join3 = movie.join ("studioName == name", studio);
         t_join3.print ();
 
+        //--------------------- index join
+
+        test_indexed_join(movie, studio);
+
+
     } // main
 
     /*************************************************************************************
@@ -281,6 +286,12 @@ class MovieDB
     var t_iselect8 = movie.select(new KeyType("New_Movie", 2025));
     out.println("Should work"); // Should find the inserted movie
     t_iselect8.print();
+
+    //--------------------- indexed select: Create index and lookup
+    movie.createIndex("genre");
+    var t_iselect9 = movie.select(new KeyType("sciFi"));
+    out.println("Should work"); // Should find the inserted movie
+    t_iselect9.print();
 }
 
     /*************************************************************************************
@@ -310,7 +321,7 @@ class MovieDB
         out.println("Drop status: " + (dropped ? "Success" : "Failed"));
 
         //   TEST 5: Drop index on "studioName" (should remove index)
-        out.println("\nTEST 5: Dropping index on 'studioName' (should work)");
+        out.println("\nTEST 5: Dropping index on 'studioName' (should fail)");
         dropped = movie.dropIndex("studioName");
         out.println("Drop status: " + (dropped ? "Success" : "Failed"));
 
@@ -429,6 +440,101 @@ class MovieDB
             out.println("Expected error due to invalid Attribute: " + e.getMessage());
         }
 
+    }
+
+    /*************************************************************************************
+     * Method for testing indexed join (`i_join`).
+     * Tests various cases, including:
+     * Indexed joins with empty tables
+     * Successful indexed joins
+     * Indexed joins with missing indices
+     * Indexed joins with mismatched schemas
+     * Indexed joins on missing columns
+     *
+     * @param movie  the movie table
+     * @param studio the studio table
+     */
+    private static void test_indexed_join(Table movie, Table studio) {
+        out.println("\n===== TESTING INDEXED JOIN (`i_join`) =====\n");
+
+        //  Create an index on the "studioName" column in `movie`
+        out.println("\nTEST 1: Creating index on 'studioName' in movie table (Expected: PASS)");
+        try {
+            movie.createIndex("studioName");
+            out.println(" Index created successfully on 'studioName'");
+        } catch (Exception e) {
+            out.println(" Index creation failed: " + e.getMessage());
+        }
+
+        //  Perform indexed join (Expected: PASS - should return joined table)
+        out.println("\nTEST 2: Performing indexed join movie.i_join('studioName', 'name', studio) (Expected: PASS)");
+        var t_i_join = movie.i_join("studioName", "name", studio);
+        if (t_i_join != null) {
+            t_i_join.print();
+        } else {
+            out.println(" Indexed join returned NULL. Ensure implementation.");
+        }
+
+        //  Indexed join when one table is empty (Expected: EMPTY)
+        var emptyTable = new Table("emptyTable", "name address presNo",
+                "String String Integer", "name");
+        out.println("\nTEST 3: movie.i_join('studioName', 'name', emptyTable) (Expected: EMPTY)");
+        var t_i_join2 = movie.i_join("studioName", "name", emptyTable);
+        if (t_i_join2.isEmpty()) {
+            out.println(" Indexed join returned an EMPTY table as expected.");
+        } else {
+            out.println(" Unexpected output. Should return an empty table.");
+        }
+
+        //  Indexed join with mismatched schemas (Expected: FAIL)
+        var mismatchedTable = new Table("mismatchedTable", "director budget",
+                "String Float", "director");
+        out.println("\nTEST 4: movie.i_join('studioName', 'director', mismatchedTable) (Expected: FAIL)");
+        try {
+            var t_i_join3 = movie.i_join("studioName", "director", mismatchedTable);
+            if (t_i_join3 != null && t_i_join3.isEmpty()) {
+                out.println("Passed");
+                t_i_join3.print();
+            }
+        } catch (Exception e) {
+            out.println(" Expected error: " + e.getMessage());
+        }
+
+        //  Indexed join with missing column (Expected: FAIL)
+        out.println("\nTEST 5: movie.i_join('invalidColumn', 'name', studio) (Expected: PASS , EMPTY)");
+        try {
+            var t_i_join4 = movie.i_join("invalidColumn", "name", studio);
+            if (t_i_join4 != null) {
+                out.println(" Expected FAIL due to missing column, but JOIN succeeded.");
+                t_i_join4.print();
+            }
+        } catch (Exception e) {
+            out.println(" Expected error: " + e.getMessage());
+        }
+
+        //  Indexed join with a table that has no index (Expected: PASS)
+        out.println("\nTEST 6: movie.i_join('studioName', 'name', studio WITHOUT index) (Expected: PASS)");
+        var noIndexStudio = new Table("noIndexStudio", "name address presNo",
+                "String String Integer", "name");
+        var studioTuple = new Comparable[]{"Universal", "Hollywood", 1111};
+        noIndexStudio.insert(studioTuple);
+        var t_i_join5 = movie.i_join("studioName", "name", noIndexStudio);
+        if (t_i_join5 != null) {
+            out.println(" Indexed join completed successfully without an index.");
+            t_i_join5.print();
+        } else {
+            out.println(" Unexpected NULL output.");
+        }
+
+        //  Indexed join on itself (Expected: PASS - same as self-join)
+        out.println("\nTEST 7: movie.i_join('studioName', 'studioName', movie) (Expected: PASS)");
+        var t_i_join6 = movie.i_join("studioName", "studioName", movie);
+        if (t_i_join6 != null) {
+            out.println(" Indexed join on itself completed successfully.");
+            t_i_join6.print();
+        } else {
+            out.println(" Unexpected NULL output.");
+        }
     }
 
 } // MovieDB
