@@ -534,25 +534,39 @@ public class Table
     public Table minus (Table table2)
     {
         out.println ("RA> " + name + ".minus (" + table2.name + ")");
-        if (! compatible (table2)) return null;
 
-        List <Comparable []> rows = new ArrayList <> ();
+        // 1. Schema Check: Ensure both tables have the same structure
+        if (!Arrays.equals(attribute, table2.attribute)) {
+            throw new IllegalArgumentException("Schemas do not match. MINUS operation aborted.");
+        }
 
-        // Add rows from 'this' table that are not in 'table2'.
-        for (var row : tuples) {
-            boolean found = false;
-            for (var otherRow : table2.tuples) {
-                if (Arrays.equals(row, otherRow)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                rows.add(row);
+        // 2. Handle Empty Tables
+        if (this.tuples.isEmpty()) {
+            out.println("Table " + this.name + " is empty. Returning an empty result.");
+            return new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
+        }
+        if (table2.tuples.isEmpty()) {
+            out.println("Table " + table2.name + " is empty. Returning original table.");
+            return this;
+        }
+
+        // 3. Create the Result Table
+        Table result = new Table(name + "_MINUS_" + table2.name, attribute, domain, key);
+
+        // 4. Convert table2 tuples to a HashSet for fast lookup
+        Set<Comparable[]> sSet = new HashSet<>();
+        for (Comparable[] tuple : table2.tuples) {
+            sSet.add(tuple); // Store tuple as a list for proper comparison
+        }
+
+        // 5. Add Tuples from R that are NOT in S (Checking Full Row Using Arrays.equals)
+        for (Comparable[] tuple : this.tuples) {
+            if (!sSet.contains(tuple)) {  // Properly check full row match
+                result.tuples.add(tuple);
             }
         }
 
-        return new Table (name + count++, attribute, domain, key, rows);
+        return result;
     } // minus
 
     /************************************************************************************
