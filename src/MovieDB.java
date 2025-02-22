@@ -99,8 +99,6 @@ class MovieDB
 
         movieStar.printIndex ();
 
-        out.println("----- Testing with MapType: " + Table.getMapType() + " -----");
-
         //--------------------- Test Index Methods
 
         try {
@@ -143,13 +141,9 @@ class MovieDB
         test_indexed_union(movie, cinema);
 
         //--------------------- minus tests ---------------------
+
         test_indexed_minus(movie, cinema);
 
-        //--------------------- minus: movie MINUS cinema
-
-        out.println ();
-        var t_minus = movie.minus (cinema);
-        t_minus.print ();
 
         //--------------------- equi-join: movie JOIN studio ON studioName = name
 
@@ -337,6 +331,11 @@ class MovieDB
      *************************************************************************************/
     private static void test_indexed_minus(Table movie, Table cinema) {
         out.println("\n===== TESTING MINUS OPERATION =====\n");
+
+        // Test 0
+        out.println ();
+        var t_minus = movie.minus (cinema);
+        t_minus.print ();
 
         // Test 1: Minus operation on movie - cinema (removes common movies)
         out.println("Test 1: movie - cinema (Expected: PASS)");
