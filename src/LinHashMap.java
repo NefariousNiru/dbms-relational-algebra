@@ -48,7 +48,7 @@ public class LinHashMap <K, V>
     /********************************************************************************
      * The `Bucket` inner class defines buckets that are stored in the hash table.
      */
-    private class Bucket
+    private class Bucket implements Serializable
     {
         int    keys;                                                         // number of active keys
         K []   key;                                                           // array of keys
@@ -116,8 +116,8 @@ public class LinHashMap <K, V>
 
     /********************************************************************************
      * Construct a hash table that uses Linear Hashing.
-     * @param classK  the class for keys (K)
-     * @param classV  the class for values (V)
+     * @param _classK  the class for keys (K)
+     * @param _classV  the class for values (V)
      */
     public LinHashMap (Class <K> _classK, Class <V> _classV)
     {
@@ -153,8 +153,14 @@ public class LinHashMap <K, V>
     {
         var enSet = new HashSet <Map.Entry <K, V>> ();
 
-        //  T O   B E   I M P L E M E N T E D
-            
+        for (var bucket : hTable) {
+            for (var b = bucket; b != null; b = b.next) {
+                for (int j = 0; j < b.keys; j++) {
+                    enSet.add(Map.entry(b.key[j], b.value[j]));
+                }
+            }
+        }
+
         return enSet;
     } // entrySet
 
@@ -163,14 +169,14 @@ public class LinHashMap <K, V>
      * @param key  the key to hash
      * @return  the location of the bucket chain containing the key-value pair
      */
-    private int h (Object key) { return key.hashCode () % mod1; }
+    private int h (Object key) { return Math.floorMod(key.hashCode(), mod1);  }
 
     /********************************************************************************
      * Hash the key using the high resolution hash function.
      * @param key  the key to hash
      * @return  the location of the bucket chain containing the key-value pair
      */
-    private int h2 (Object key) { return key.hashCode () % mod2; }
+    private int h2 (Object key) { return Math.floorMod(key.hashCode (),  mod2); }
 
     /********************************************************************************
      * Given the key, look up the value in the hash table.
@@ -247,7 +253,48 @@ public class LinHashMap <K, V>
     {
         out.println ("split: bucket chain " + isplit);
 
-        //  T O   B E   I M P L E M E N T E D
+        Bucket oldB = hTable.get(isplit);
+        Bucket newB = new Bucket();
+
+        List<K> remainKeys = new ArrayList<>();
+        List<V> remainValues = new ArrayList<>();
+        List<K> moveKeys = new ArrayList<>();
+        List<V> moveValues = new ArrayList<>();
+
+        // iterate through the bucket chain and separate entries
+        for (Bucket b = oldB; b != null; b = b.next) {
+            for (int i = 0; i < b.keys; i++) {
+                if (h2(b.key[i]) == isplit) {
+                    remainKeys.add(b.key[i]);
+                    remainValues.add(b.value[i]);
+                } else {
+                    moveKeys.add(b.key[i]);
+                    moveValues.add(b.value[i]);
+                }
+            }
+        }
+
+        // Rebuild the bucket at isplit with only the entries that remain
+        Bucket rebuiltB = new Bucket();
+        for (int i = 0; i < remainKeys.size(); i++) {
+            rebuiltB.add(remainKeys.get(i), remainValues.get(i));
+        }
+        hTable.set(isplit, rebuiltB);
+
+        // Populate new bucket
+        for (int i = 0; i < moveKeys.size(); i++) {
+            newB.add(moveKeys.get(i), moveValues.get(i));
+        }
+        hTable.add(newB);
+
+        isplit++;
+
+        // if a phase is complete, update the hash moduli
+        if (isplit == mod1) {
+            isplit = 0;
+            mod1 = mod2;
+            mod2 = 2 * mod1;
+        }
 
     } // split
 

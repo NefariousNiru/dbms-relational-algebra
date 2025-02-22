@@ -45,6 +45,13 @@ public class KeyType
     } // constructor
 
     /*************************************************************************************
+     * Getter for key
+     */
+    public Comparable[] getKey() {
+        return key;  //
+    }
+
+    /*************************************************************************************
      * Compare two keys (negative => less than, zero => equals, positive => greater than).
      * @param k  the other key (to compare with this)
      * @return  resultant integer that's negative, zero or positive
@@ -52,6 +59,10 @@ public class KeyType
     @SuppressWarnings("unchecked")
     public int compareTo (KeyType k)
     {
+        if (this.key.length != k.key.length) {
+            return this.key.length - k.key.length;
+        }
+
         for (int i = 0; i < key.length; i++) {
             Comparable<?> thisKey = key[i];
             Comparable<?> otherKey = k.key[i];
