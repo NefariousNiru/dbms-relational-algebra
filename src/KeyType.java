@@ -23,7 +23,7 @@ public class KeyType
     /** Array holding the attribute values for a particular key
      */
     private final Comparable [] key;
-
+    private final boolean DEBUG = false;
     /*************************************************************************************
      * Construct an instance of KeyType from a Comparable array.  
      * @param _key  the primary key
@@ -75,7 +75,7 @@ public class KeyType
             }
 
             int cmp = ((Comparable) thisKey).compareTo(otherKey);
-            System.out.println("DEBUG: Comparing " + thisKey + " with " + otherKey + " -> " + cmp);
+            if (DEBUG) System.out.println("DEBUG: Comparing " + thisKey + " with " + otherKey + " -> " + cmp);
             if (cmp != 0) return cmp;
         }
         return 0;
@@ -86,11 +86,11 @@ public class KeyType
      * @param k  the other key (to compare with this)
      * @return  true if equal, false otherwise
      */
-    public boolean equals (Object k)
-    {
-        return compareTo ((KeyType) k) == 0;
-    } // equals
-
+    public boolean equals(Object k) {
+        if (this == k) return true;
+        if (!(k instanceof KeyType)) return false;
+        return compareTo((KeyType) k) == 0;
+    }
     /*************************************************************************************
      * Compute a hash code for this object (equal objects should produce the same hash code).
      * @return  an integer hash code value

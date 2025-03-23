@@ -22,8 +22,8 @@ public class Project3 {
 
     public static void main(String[] args) {
         // 1) Run tests for Strong Filter
-//        logger.info("=== Strong Filter Tests ===");
-//        runTestsForFilterType("STRONG");
+        logger.info("=== Strong Filter Tests ===");
+        runTestsForFilterType("STRONG");
 
 //        // 2) Run tests for Medium Filter
 //        logger.info("=== Medium Filter Tests ===");
@@ -48,8 +48,8 @@ public class Project3 {
             // 1) Generate random data & build the tables
             Table[] tables = generateTuples(j);
             Table student = tables[0];
-            Table takes   = tables[1];
-            Table course  = tables[2];
+            Table course   = tables[1];
+            Table takes  = tables[2];
             Predicate<Comparable[]> predicate = getPredicate(filterType);
 
             for (int i = 0; i < 6; i++) {
@@ -143,12 +143,15 @@ public class Project3 {
         for (Comparable[] row : result[0]) {
             student.insert(row);
         }
+        out.println("Inserted Student");
         for (Comparable[] row : result[1]) {
             course.insert(row);
         }
+        out.println("Inserted Course");
         for (Comparable[] row : result[2]) {
             takes.insert(row);
         }
+        out.println("Inserted Takes");
 
         // (Optional) Create indices if desired:
         student.createUniqueIndex("sid");
@@ -156,7 +159,9 @@ public class Project3 {
         takes.createIndex("cid");
         course.createUniqueIndex("cid");
 
-        return new Table[]{ student, takes, course };
+        out.println("Index Created");
+
+        return new Table[]{ student, course, takes };
     }
 
     private static Predicate<Comparable[]> getPredicate(String filterType) {

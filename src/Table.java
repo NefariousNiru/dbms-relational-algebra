@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.HASH_MAP;
+    private static final MapType mType = MapType.LINHASH_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
@@ -201,7 +201,7 @@ public class Table
      */
     public void createIndex(String columnName)
     {
-        out.println("Creating index on column: " + columnName);
+        out.println("Creating index on column: " + columnName + " table: " + this.name);
 
         int colIdx = col(columnName);
         if (colIdx == - 1) {
@@ -230,7 +230,7 @@ public class Table
      * @throws IllegalArgumentException If the column does not exist or contains duplicates.
      */
     public void createUniqueIndex(String columnName) {
-        out.println("Creating unique index on column: " + columnName);
+        out.println("Creating unique index on column: " + columnName  + " table: " + this.name);
 
         int colIdx = col(columnName);
         if (colIdx == -1) {
@@ -337,7 +337,6 @@ public class Table
     public Table select (Predicate <Comparable []> predicate)
     {
 //        out.println ("RA> " + name + ".select (" + predicate + ")");
-
         return new Table (name + count++, attribute, domain, key,
                    tuples.stream ().filter (t -> predicate.test (t))
                                    .collect (Collectors.toList ()));
@@ -1126,7 +1125,7 @@ public class Table
      */
     public int insert (Comparable [] tup)
     {
-        out.println ("DML> insert into " + name + " values (" + Arrays.toString (tup) + ")");
+//        out.println ("DML> insert into " + name + " values (" + Arrays.toString (tup) + ")");
 
         if (!typeCheck(tup)) {
             return -1;

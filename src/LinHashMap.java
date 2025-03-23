@@ -23,15 +23,15 @@ public class LinHashMap <K, V>
 {
     /** The debug flag
      */
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
     /** The number of slots (for key-value pairs) per bucket.
      */
-    private static final int SLOTS = 4;
+    private static final int SLOTS = 16;
 
     /** The threshold/upper bound on the load factor
      */
-    private static final double THRESHOLD = 1.1;
+    private static final double THRESHOLD = 1.5;
 
     /** The class for type K.
      */
@@ -224,7 +224,7 @@ public class LinHashMap <K, V>
         var i    = h (key);                                                  // hash to i-th bucket chain
         var bh   = hTable.get (i);                                           // start with home bucket
         var oldV = find (key, bh, false);                                    // find old value associated with key
-        out.println ("LinearHashMap.put: key " + key + ", h() = " + i + ", value = " + value);
+        if (DEBUG) out.println ("LinearHashMap.put: key " + key + ", h() = " + i + ", value = " + value);
 
         kCount += 1;                                                         // increment the key count
         var lf = loadFactor ();                                              // compute the load factor
@@ -250,15 +250,15 @@ public class LinHashMap <K, V>
      * reset 'isplit' to zero, and update the hash functions.
      */
     private void split() {
-        out.println("split: bucket chain " + isplit);
+        if (DEBUG) out.println("split: bucket chain " + isplit);
 
         Bucket oldB = hTable.get(isplit);
         Bucket newB = new Bucket();
 
-        List<K> remainKeys = new ArrayList<>();
-        List<V> remainValues = new ArrayList<>();
-        List<K> moveKeys = new ArrayList<>();
-        List<V> moveValues = new ArrayList<>();
+        List<K> remainKeys = new ArrayList<>(oldB.keys * 2);
+        List<V> remainValues = new ArrayList<>(oldB.keys * 2);
+        List<K> moveKeys = new ArrayList<>(oldB.keys * 2);
+        List<V> moveValues = new ArrayList<>(oldB.keys * 2);
 
         // Iterate through the bucket chain and separate entries into those that remain and those to move.
         for (Bucket b = oldB; b != null; b = b.next) {
@@ -319,11 +319,11 @@ public class LinHashMap <K, V>
      */
     public void printT ()
     {
-        out.println ("LinHashMap");
-        out.println ("-------------------------------------------");
+        if (DEBUG) out.println ("LinHashMap");
+        if (DEBUG) out.println ("-------------------------------------------");
 
         for (var i = 0; i < hTable.size (); i++) {
-            out.print ("Bucket [ " + i + " ] = ");
+            if (DEBUG) out.print ("Bucket [ " + i + " ] = ");
             var j = 0;
             for (var b = hTable.get (i); b != null; b = b.next) {
                 if (j > 0) out.print (" \t\t --> ");
@@ -332,7 +332,7 @@ public class LinHashMap <K, V>
             } // for
         } // for
 
-        out.println ("-------------------------------------------");
+        if (DEBUG) out.println ("-------------------------------------------");
     } // printT
 
 //-----------------------------------------------------------------------------------

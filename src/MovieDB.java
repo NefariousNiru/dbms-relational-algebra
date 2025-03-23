@@ -106,7 +106,7 @@ class MovieDB
         try {
             test_index_methods(movie);
         } catch (Exception e) {
-            out.println("Index is set to NO_MAP. Skipping tests");
+            out.println(e.getMessage());
         }
 
         //--------------------- Test project
