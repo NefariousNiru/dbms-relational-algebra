@@ -112,9 +112,7 @@ public class Project3 {
 
         out.println("Generating start");
         // 2) Decide how many rows for each table
-        //    Student: j
-        //    Course: j
-        //    Takes: j
+        //    Student: j, Course: j, Takes: j/8
         int[] tups = { j, j, j / 8};
 
         // 3) Generate the data (3D array: table i, row j, column k)

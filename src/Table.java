@@ -89,7 +89,7 @@ public class Table
         case TREE_MAP    -> new TreeMap <> ();
         case HASH_MAP    -> new HashMap <> ();
 //        Use in Project 2
-        case LINHASH_MAP -> new LinHashMap <> (KeyType.class, Comparable [].class);
+        case LINHASH_MAP -> new LinHashMap2 <> (KeyType.class, Comparable [].class);
 //        case BPTREE_MAP  -> new BpTreeMap <> (KeyType.class, Comparable [].class);
         default          -> null;
         }; // switch
@@ -106,7 +106,7 @@ public class Table
         return switch (mType) {
             case TREE_MAP    -> new TreeMap<>();
             case HASH_MAP    -> new HashMap<>();
-            case LINHASH_MAP -> new LinHashMap <>(Comparable.class, (Class<List<Comparable[]>>)(Class<?>)ArrayList.class);
+            case LINHASH_MAP -> new LinHashMap2 <>(Comparable.class, (Class<List<Comparable[]>>)(Class<?>)ArrayList.class);
 //        case BPTREE_MAP  -> new BpTreeMap <> (KeyType.class, Comparable [].class);
             default          -> throw new IllegalArgumentException("Unsupported index type: " + mType);
         };
@@ -1132,15 +1132,11 @@ public class Table
         }
 
         KeyType primaryKey = extractPrimaryKey(tup);
-        if (index != null && index.containsKey(primaryKey)) {
+        if (index != null && index.putIfAbsent(primaryKey, tup) != null) {
             throw new IllegalArgumentException("Duplicate primary key: " + primaryKey);
         }
 
         tuples.add(tup);
-
-        if (index != null) {
-            index.put(primaryKey, tup);
-        }
 
         if (index != null && !secondaryIndices.isEmpty()) {
             for (var entry : secondaryIndices.entrySet()) {
@@ -1153,7 +1149,8 @@ public class Table
                 }
 
                 Comparable key = tup[colIdx];
-                columnIndex.computeIfAbsent(key, k -> new ArrayList<>()).add(tup);
+                columnIndex.putIfAbsent(key, new ArrayList<>());
+                columnIndex.get(key).add(tup);
             }
         }
 

@@ -1,10 +1,10 @@
 
 /************************************************************************************
- * @file LinHashMap.java
+ * @file LinHashMap2.java
  *
  * @author  John Miller
  *
- * compile javac --enable-preview --release 21 LinHashMap.java
+ * compile javac --enable-preview --release 21 LinHashMap2.java
  * run     java --enable-preview LinHashMap
  */
 
@@ -23,15 +23,15 @@ public class LinHashMap <K, V>
 {
     /** The debug flag
      */
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
     /** The number of slots (for key-value pairs) per bucket.
      */
-    private static final int SLOTS = 16;
+    private static final int SLOTS = 64;
 
     /** The threshold/upper bound on the load factor
      */
-    private static final double THRESHOLD = 1.5;
+    private static final double THRESHOLD = 2;
 
     /** The class for type K.
      */
@@ -169,14 +169,14 @@ public class LinHashMap <K, V>
      * @param key  the key to hash
      * @return  the location of the bucket chain containing the key-value pair
      */
-    private int h (Object key) { return Math.floorMod(key.hashCode(), mod1);  }
+    private int h (Object key) { return Math.abs(key.hashCode() % mod1);  }
 
     /********************************************************************************
      * Hash the key using the high resolution hash function.
      * @param key  the key to hash
      * @return  the location of the bucket chain containing the key-value pair
      */
-    private int h2 (Object key) { return Math.floorMod(key.hashCode (),  mod2); }
+    private int h2 (Object key) { return Math.abs(key.hashCode () % mod2); }
 
     /********************************************************************************
      * Given the key, look up the value in the hash table.
@@ -184,12 +184,28 @@ public class LinHashMap <K, V>
      * @return  the value associated with the key
      */
     @SuppressWarnings("unchecked")
-    public V get (Object key)
-    {
-        var i = h (key);
-        // FIX for high resolution
-        return find ((K) key, hTable.get (i), true);
-    } // get
+    public V get(Object key) {
+        int i = h(key);
+
+        // If we've split past this bucket, use the higher resolution hash
+        if (i < isplit) {
+            i = h2(key) % hTable.size();
+        }
+
+        Bucket bh = hTable.get(i);
+
+        // Directly search in the bucket chain
+        for (Bucket b = bh; b != null; b = b.next) {
+            count++;  // Count bucket accesses
+            for (int j = 0; j < b.keys; j++) {
+                if (b.key[j].equals(key)) {
+                    return b.value[j];
+                }
+            }
+        }
+
+        return null;  // Key not found
+    }
 
     /********************************************************************************
      * Find the key in the bucket chain that starts with home bucket bh.
@@ -219,29 +235,66 @@ public class LinHashMap <K, V>
      * @param value  the value to insert
      * @return  the old/previous value, null if none
      */
-    public V put (K key, V value)
-    {
-        var i    = h (key);                                                  // hash to i-th bucket chain
-        var bh   = hTable.get (i);                                           // start with home bucket
-        var oldV = find (key, bh, false);                                    // find old value associated with key
-        if (DEBUG) out.println ("LinearHashMap.put: key " + key + ", h() = " + i + ", value = " + value);
+    public V put(K key, V value) {
+        // First check if key already exists
+        V oldValue = null;
 
-        kCount += 1;                                                         // increment the key count
-        var lf = loadFactor ();                                              // compute the load factor
-        if (DEBUG) out.println ("put: load factor = " + lf);
-        if (lf > THRESHOLD) split ();                                        // split beyond THRESHOLD
+        // Get the appropriate hash bucket
+        int i = h(key);
+        if (i < isplit) {
+            i = h2(key) % hTable.size();
+        }
 
-        var b = bh;
-        while (true) {
-            if (b.keys < SLOTS) { b.add (key, value); return oldV; }
-            if (b.next != null) b = b.next; else break;
-        } // while
+        Bucket bh = hTable.get(i);
 
-        var bn = new Bucket ();
-        bn.add (key, value);
-        b.next = bn;                                                         // add new bucket at end of chain
-        return oldV;
-    } // put
+        // Search for existing key
+        boolean keyExists = false;
+        for (Bucket b = bh; b != null && !keyExists; b = b.next) {
+            for (int j = 0; j < b.keys; j++) {
+                if (b.key[j].equals(key)) {
+                    oldValue = b.value[j];
+                    b.value[j] = value;
+                    keyExists = true;
+                    break;
+                }
+            }
+        }
+
+        // If key doesn't exist, add it
+        if (!keyExists) {
+            kCount++;
+
+            // Check if we need to split before adding
+            double lf = loadFactor();
+            if (DEBUG) out.println("put: load factor = " + lf);
+            if (lf > THRESHOLD) {
+                split();
+
+                // Recalculate bucket after split
+                i = h(key);
+                if (i < isplit) {
+                    i = h2(key) % hTable.size();
+                }
+                bh = hTable.get(i);
+            }
+
+            // Find a bucket with space
+            Bucket b = bh;
+            while (b.keys >= SLOTS && b.next != null) {
+                b = b.next;
+            }
+
+            if (b.keys < SLOTS) {
+                b.add(key, value);
+            } else {
+                Bucket bn = new Bucket();
+                bn.add(key, value);
+                b.next = bn;
+            }
+        }
+
+        return oldValue;
+    }
 
     /********************************************************************************
      * Split bucket chain 'isplit' by creating a new bucket chain at the end of the
@@ -249,65 +302,67 @@ public class LinHashMap <K, V>
      * function 'h2'.  Increment 'isplit'.  If current split phase is complete,
      * reset 'isplit' to zero, and update the hash functions.
      */
+    /**
+     * Modified split() method with improved efficiency
+     */
     private void split() {
         if (DEBUG) out.println("split: bucket chain " + isplit);
 
-        Bucket oldB = hTable.get(isplit);
-        Bucket newB = new Bucket();
+        // Add a new bucket at the end of the hash table
+        hTable.add(new Bucket());
+        int newIndex = hTable.size() - 1;
 
-        List<K> remainKeys = new ArrayList<>(oldB.keys * 2);
-        List<V> remainValues = new ArrayList<>(oldB.keys * 2);
-        List<K> moveKeys = new ArrayList<>(oldB.keys * 2);
-        List<V> moveValues = new ArrayList<>(oldB.keys * 2);
+        // Get the bucket chain that needs to be split
+        Bucket oldBucketChain = hTable.get(isplit);
 
-        // Iterate through the bucket chain and separate entries into those that remain and those to move.
-        for (Bucket b = oldB; b != null; b = b.next) {
-            for (int i = 0; i < b.keys; i++) {
-                if (h2(b.key[i]) == isplit) {
-                    remainKeys.add(b.key[i]);
-                    remainValues.add(b.value[i]);
-                } else {
-                    moveKeys.add(b.key[i]);
-                    moveValues.add(b.value[i]);
-                }
+        // Replace with empty bucket
+        hTable.set(isplit, new Bucket());
+
+        // Temp collection to hold all entries from the chain
+        List<Map.Entry<K, V>> entries = new ArrayList<>();
+
+        // Collect all entries from the chain
+        for (Bucket b = oldBucketChain; b != null; b = b.next) {
+            for (int j = 0; j < b.keys; j++) {
+                entries.add(Map.entry(b.key[j], b.value[j]));
             }
         }
 
-        // Rebuild the bucket chain at 'isplit' for the remaining entries.
-        Bucket rebuiltB = new Bucket();
-        Bucket current = rebuiltB;
-        for (int i = 0; i < remainKeys.size(); i++) {
-            // If the current bucket is full, create a new one and chain it.
-            if (current.keys >= SLOTS) {
-                Bucket newBucket = new Bucket();
-                current.next = newBucket;
-                current = newBucket;
-            }
-            current.add(remainKeys.get(i), remainValues.get(i));
-        }
-        hTable.set(isplit, rebuiltB);
+        // Redistribute all entries
+        for (Map.Entry<K, V> entry : entries) {
+            K key = entry.getKey();
+            V val = entry.getValue();
 
-        // Populate new bucket with the moved entries, also handling overflow by chaining.
-        Bucket currentNew = newB;
-        for (int i = 0; i < moveKeys.size(); i++) {
-            if (currentNew.keys >= SLOTS) {
-                Bucket newBucket = new Bucket();
-                currentNew.next = newBucket;
-                currentNew = newBucket;
-            }
-            currentNew.add(moveKeys.get(i), moveValues.get(i));
-        }
-        hTable.add(newB);
+            // Compute new hash location using high-resolution hash
+            int newHash = h2(key);
+            int index = newHash % hTable.size();
 
+            Bucket targetBucket = hTable.get(index);
+
+            // Find a bucket with space or create a new one
+            Bucket b = targetBucket;
+            while (b.keys >= SLOTS && b.next != null) {
+                b = b.next;
+            }
+
+            if (b.keys < SLOTS) {
+                b.add(key, val);
+            } else {
+                Bucket bn = new Bucket();
+                bn.add(key, val);
+                b.next = bn;
+            }
+        }
+
+        // Update the split pointer
         isplit++;
-
-        // If a phase is complete, update the hash moduli.
         if (isplit == mod1) {
             isplit = 0;
             mod1 = mod2;
             mod2 = 2 * mod1;
         }
     }
+
     // split
 
 //-----------------------------------------------------------------------------------

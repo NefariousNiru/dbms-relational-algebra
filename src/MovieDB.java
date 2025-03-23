@@ -166,7 +166,7 @@ class MovieDB
 
         //--------------------- index join
 
-        test_indexed_join(movie, studio);
+        test_indexed_join(movie, studio, cinema);
 
 
     } // main
@@ -456,7 +456,7 @@ class MovieDB
      * @param movie  the movie table
      * @param studio the studio table
      */
-    private static void test_indexed_join(Table movie, Table studio) {
+    private static void test_indexed_join(Table movie, Table studio, Table cinema) {
         out.println("\n===== TESTING INDEXED JOIN (`i_join`) =====\n");
 
         //  Create an index on the "studioName" column in `movie`
@@ -534,6 +534,15 @@ class MovieDB
         if (t_i_join6 != null) {
             out.println(" Indexed join on itself completed successfully.");
             t_i_join6.print();
+        } else {
+            out.println(" Unexpected NULL output.");
+        }
+
+        out.println("\nTEST 8: movie.i_join(movie) (Expected: PASS)");
+        var t_i_join7 = movie.i_join(cinema);
+        if (t_i_join7 != null) {
+            out.println(" Indexed join on itself completed successfully.");
+            t_i_join7.print();
         } else {
             out.println(" Unexpected NULL output.");
         }
