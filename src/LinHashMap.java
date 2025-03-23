@@ -249,9 +249,8 @@ public class LinHashMap <K, V>
      * function 'h2'.  Increment 'isplit'.  If current split phase is complete,
      * reset 'isplit' to zero, and update the hash functions.
      */
-    private void split ()
-    {
-        out.println ("split: bucket chain " + isplit);
+    private void split() {
+        out.println("split: bucket chain " + isplit);
 
         Bucket oldB = hTable.get(isplit);
         Bucket newB = new Bucket();
@@ -261,7 +260,7 @@ public class LinHashMap <K, V>
         List<K> moveKeys = new ArrayList<>();
         List<V> moveValues = new ArrayList<>();
 
-        // iterate through the bucket chain and separate entries
+        // Iterate through the bucket chain and separate entries into those that remain and those to move.
         for (Bucket b = oldB; b != null; b = b.next) {
             for (int i = 0; i < b.keys; i++) {
                 if (h2(b.key[i]) == isplit) {
@@ -274,29 +273,42 @@ public class LinHashMap <K, V>
             }
         }
 
-        // Rebuild the bucket at isplit with only the entries that remain
+        // Rebuild the bucket chain at 'isplit' for the remaining entries.
         Bucket rebuiltB = new Bucket();
+        Bucket current = rebuiltB;
         for (int i = 0; i < remainKeys.size(); i++) {
-            rebuiltB.add(remainKeys.get(i), remainValues.get(i));
+            // If the current bucket is full, create a new one and chain it.
+            if (current.keys >= SLOTS) {
+                Bucket newBucket = new Bucket();
+                current.next = newBucket;
+                current = newBucket;
+            }
+            current.add(remainKeys.get(i), remainValues.get(i));
         }
         hTable.set(isplit, rebuiltB);
 
-        // Populate new bucket
+        // Populate new bucket with the moved entries, also handling overflow by chaining.
+        Bucket currentNew = newB;
         for (int i = 0; i < moveKeys.size(); i++) {
-            newB.add(moveKeys.get(i), moveValues.get(i));
+            if (currentNew.keys >= SLOTS) {
+                Bucket newBucket = new Bucket();
+                currentNew.next = newBucket;
+                currentNew = newBucket;
+            }
+            currentNew.add(moveKeys.get(i), moveValues.get(i));
         }
         hTable.add(newB);
 
         isplit++;
 
-        // if a phase is complete, update the hash moduli
+        // If a phase is complete, update the hash moduli.
         if (isplit == mod1) {
             isplit = 0;
             mod1 = mod2;
             mod2 = 2 * mod1;
         }
-
-    } // split
+    }
+    // split
 
 //-----------------------------------------------------------------------------------
 // Print/show the Linear Hash Map

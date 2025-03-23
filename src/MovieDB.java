@@ -47,12 +47,14 @@ class MovieDB
         var film1 = new Comparable [] { "Star_Wars_2", 1980, 124, "sciFi", "Fox", 12345 };
         var film2 = new Comparable [] { "Rocky", 1985, 200, "action", "Universal", 12125 };
         var film3 = new Comparable [] { "Rambo", 1978, 100, "action", "Universal", 32355 };
+        var film8 = new Comparable [] { "Rambo2", 1977, 100, "action", "Universal", 32355 };
 
         out.println ();
         movie.insert (film0);
         movie.insert (film1);
         movie.insert (film2);
         movie.insert (film3);
+        movie.insert (film8);
         movie.print ();
 
         var film4 = new Comparable [] { "Galaxy_Quest", 1999, 104, "comedy", "DreamWorks", 67890 };

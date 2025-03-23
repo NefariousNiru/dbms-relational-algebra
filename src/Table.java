@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.LINHASH_MAP;
+    private static final MapType mType = MapType.HASH_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
@@ -288,7 +288,7 @@ public class Table
      */
     public Table project (String attributes)
     {
-        out.println ("RA> " + name + ".project (" + attributes + ")");
+//        out.println ("RA> " + name + ".project (" + attributes + ")");
         var attrs     = attributes.split (" ");
 
         if (attrs.length == 0)
@@ -336,7 +336,7 @@ public class Table
      */
     public Table select (Predicate <Comparable []> predicate)
     {
-        out.println ("RA> " + name + ".select (" + predicate + ")");
+//        out.println ("RA> " + name + ".select (" + predicate + ")");
 
         return new Table (name + count++, attribute, domain, key,
                    tuples.stream ().filter (t -> predicate.test (t))
@@ -824,6 +824,202 @@ public class Table
  // i_join
 
     /************************************************************************************
+     * Join this table and table2 by performing an INDEXED NATURAL JOIN.  Tuples from both tables
+     * are compared requiring common attributes to be equal.  The duplicate column is also
+     * eliminated.
+     *
+     * #usage movieStar.i_join (starsIn)
+     *
+     * @param table2  the rhs table in the join operation
+     * @return  a table with tuples satisfying the equality predicate
+     */
+    public Table i_join(Table table2) {
+        // 1. Identify common attributes between "this" table and table2
+        List<String> commonAttrs = new ArrayList<>();
+        for (String attr1 : this.attribute) {
+            for (String attr2 : table2.attribute) {
+                if (attr1.equals(attr2)) {
+                    commonAttrs.add(attr1);
+                    break;
+                }
+            }
+        }
+
+        if (commonAttrs.isEmpty()) {
+            throw new IllegalArgumentException("No common attributes for natural join between "
+                    + this.name + " and " + table2.name);
+        }
+
+        // 2. Check if any common attribute is indexed in table2.
+        // We'll pick the first common attribute that has a secondary index.
+        String indexedAttr = null;
+        for (String attr : commonAttrs) {
+            if (table2.secondaryIndices.containsKey(attr)) {
+                indexedAttr = attr;
+                break;
+            }
+        }
+
+        // 3. If no indexed attribute is found, fall back to the regular (nested-loop) natural join.
+        if (indexedAttr == null) {
+            return join(table2);
+        }
+
+        // 4. Use the indexed attribute to drive the join.
+        // Get the column index for the join attribute in both tables.
+        int thisJoinIndex = this.col(indexedAttr);
+        int table2JoinIndex = table2.col(indexedAttr);
+
+        // Get the pre-built index from table2.
+        Map<Comparable, List<Comparable[]>> indexMap = table2.secondaryIndices.get(indexedAttr);
+
+        List<Comparable[]> joinedRows = new ArrayList<>();
+        // For each tuple in "this" table, use the indexed attribute to fetch candidates from table2.
+        for (Comparable[] thisTuple : this.tuples) {
+            Comparable joinVal = thisTuple[thisJoinIndex];
+            List<Comparable[]> candidates = indexMap.get(joinVal);
+            if (candidates != null) {
+                for (Comparable[] candidate : candidates) {
+                    // Even though the join is on the indexed attribute,
+                    // we need to check all common attributes for equality.
+                    boolean allMatch = true;
+                    for (String attr : commonAttrs) {
+                        int idxThis = this.col(attr);
+                        int idxTable2 = table2.col(attr);
+                        if (!thisTuple[idxThis].equals(candidate[idxTable2])) {
+                            allMatch = false;
+                            break;
+                        }
+                    }
+                    if (allMatch) {
+                        // Merge the tuples.
+                        // Start with all attributes from "this" tuple.
+                        List<Comparable> merged = new ArrayList<>(Arrays.asList(thisTuple));
+                        // Add only those attributes from candidate that are not common.
+                        for (int j = 0; j < table2.attribute.length; j++) {
+                            if (!commonAttrs.contains(table2.attribute[j])) {
+                                merged.add(candidate[j]);
+                            }
+                        }
+                        joinedRows.add(merged.toArray(new Comparable[0]));
+                    }
+                }
+            }
+        }
+
+        // 5. Construct the schema (attribute names and domains) for the result.
+        List<String> newAttributes = new ArrayList<>(Arrays.asList(this.attribute));
+        List<Class> newDomains = new ArrayList<>(Arrays.asList(this.domain));
+        for (int j = 0; j < table2.attribute.length; j++) {
+            if (!commonAttrs.contains(table2.attribute[j])) {
+                newAttributes.add(table2.attribute[j]);
+                newDomains.add(table2.domain[j]);
+            }
+        }
+
+        // 6. Create and return the new Table.
+        // For simplicity, we use "this.key" as the primary key in the result.
+        return new Table(this.name + "_NJ_" + table2.name,
+                newAttributes.toArray(new String[0]),
+                newDomains.toArray(new Class[0]),
+                this.key,
+                joinedRows);
+    }
+
+//    public Table i_join(Table table2) {
+//        // 1. Identify common attributes between "this" table and table2
+//        List<String> commonAttrs = new ArrayList<>();
+//        for (String attr1 : this.attribute) {
+//            for (String attr2 : table2.attribute) {
+//                if (attr1.equals(attr2)) {
+//                    commonAttrs.add(attr1);
+//                    break;
+//                }
+//            }
+//        }
+//
+//        if (commonAttrs.isEmpty()) {
+//            throw new IllegalArgumentException("No common attributes for natural join between "
+//                    + this.name + " and " + table2.name);
+//        }
+//
+//        // 2. Check if any common attribute is indexed in table2.
+//        // We'll pick the first common attribute that has a secondary index.
+//        String indexedAttr = null;
+//        for (String attr : commonAttrs) {
+//            if (table2.secondaryIndices.containsKey(attr)) {
+//                indexedAttr = attr;
+//                break;
+//            }
+//        }
+//
+//        // 3. If no indexed attribute is found, fall back to the regular (nested-loop) natural join.
+//        if (indexedAttr == null) {
+//            return join(table2);
+//        }
+//
+//        // 4. Use the indexed attribute to drive the join.
+//        // Get the column index for the join attribute in both tables.
+//        int thisJoinIndex = this.col(indexedAttr);
+//        int table2JoinIndex = table2.col(indexedAttr);
+//
+//        // Get the pre-built index from table2.
+//        Map<Comparable, List<Comparable[]>> indexMap = table2.secondaryIndices.get(indexedAttr);
+//
+//        List<Comparable[]> joinedRows = new ArrayList<>();
+//        // For each tuple in "this" table, use the indexed attribute to fetch candidates from table2.
+//        for (Comparable[] thisTuple : this.tuples) {
+//            Comparable joinVal = thisTuple[thisJoinIndex];
+//            List<Comparable[]> candidates = indexMap.get(joinVal);
+//            if (candidates != null) {
+//                for (Comparable[] candidate : candidates) {
+//                    // Even though the join is on the indexed attribute,
+//                    // we need to check all common attributes for equality.
+//                    boolean allMatch = true;
+//                    for (String attr : commonAttrs) {
+//                        int idxThis = this.col(attr);
+//                        int idxTable2 = table2.col(attr);
+//                        if (!thisTuple[idxThis].equals(candidate[idxTable2])) {
+//                            allMatch = false;
+//                            break;
+//                        }
+//                    }
+//                    if (allMatch) {
+//                        // Merge the tuples.
+//                        // Start with all attributes from "this" tuple.
+//                        List<Comparable> merged = new ArrayList<>(Arrays.asList(thisTuple));
+//                        // Add only those attributes from candidate that are not common.
+//                        for (int j = 0; j < table2.attribute.length; j++) {
+//                            if (!commonAttrs.contains(table2.attribute[j])) {
+//                                merged.add(candidate[j]);
+//                            }
+//                        }
+//                        joinedRows.add(merged.toArray(new Comparable[0]));
+//                    }
+//                }
+//            }
+//        }
+//
+//        // 5. Construct the schema (attribute names and domains) for the result.
+//        List<String> newAttributes = new ArrayList<>(Arrays.asList(this.attribute));
+//        List<Class> newDomains = new ArrayList<>(Arrays.asList(this.domain));
+//        for (int j = 0; j < table2.attribute.length; j++) {
+//            if (!commonAttrs.contains(table2.attribute[j])) {
+//                newAttributes.add(table2.attribute[j]);
+//                newDomains.add(table2.domain[j]);
+//            }
+//        }
+//
+//        // 6. Create and return the new Table.
+//        // For simplicity, we use "this.key" as the primary key in the result.
+//        return new Table(this.name + "_NJ_" + table2.name,
+//                newAttributes.toArray(new String[0]),
+//                newDomains.toArray(new Class[0]),
+//                this.key,
+//                joinedRows);
+//    }
+
+    /************************************************************************************
      * Join this table and table2 by performing an NATURAL JOIN.  Tuples from both tables
      * are compared requiring common attributes to be equal.  The duplicate column is also
      * eliminated.
@@ -1200,6 +1396,9 @@ public class Table
         return obj;
     } // extractDom
 
+    public List<Comparable[]> getTuples() {
+        return tuples;
+    }
 
 } // Table
 
