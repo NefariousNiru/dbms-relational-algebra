@@ -26,12 +26,12 @@ public class Project3 {
         runTestsForFilterType("STRONG");
 
 //        // 2) Run tests for Medium Filter
-//        logger.info("=== Medium Filter Tests ===");
-//        runTestsForFilterType("MEDIUM");
+        logger.info("=== Medium Filter Tests ===");
+        runTestsForFilterType("MEDIUM");
 //
 //        // 3) Run tests for Weak Filter
-//        logger.info("=== Weak Filter Tests ===");
-//        runTestsForFilterType("WEAK");
+        logger.info("=== Weak Filter Tests ===");
+        runTestsForFilterType("WEAK");
     }
 
     /**

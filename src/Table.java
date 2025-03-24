@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.TREE_MAP;
+    private static final MapType mType = MapType.LINHASH_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.

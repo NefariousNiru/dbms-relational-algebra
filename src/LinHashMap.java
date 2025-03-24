@@ -1,10 +1,10 @@
 
 /************************************************************************************
- * @file LinHashMap2.java
+ * @file LinHashMap.java
  *
  * @author  John Miller
  *
- * compile javac --enable-preview --release 21 LinHashMap2.java
+ * compile javac --enable-preview --release 21 LinHashMap.java
  * run     java --enable-preview LinHashMap
  */
 
@@ -27,11 +27,11 @@ public class LinHashMap <K, V>
 
     /** The number of slots (for key-value pairs) per bucket.
      */
-    private static final int SLOTS = 16;
+    private static final int SLOTS = 32;
 
     /** The threshold/upper bound on the load factor
      */
-    private static final double THRESHOLD = 0.75;
+    private static final double THRESHOLD = 0.6;
 
     /** The class for type K.
      */
