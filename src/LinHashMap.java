@@ -23,15 +23,15 @@ public class LinHashMap <K, V>
 {
     /** The debug flag
      */
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
     /** The number of slots (for key-value pairs) per bucket.
      */
-    private static final int SLOTS = 64;
+    private static final int SLOTS = 16;
 
     /** The threshold/upper bound on the load factor
      */
-    private static final double THRESHOLD = 2;
+    private static final double THRESHOLD = 0.75;
 
     /** The class for type K.
      */

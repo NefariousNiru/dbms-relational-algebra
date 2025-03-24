@@ -59,21 +59,18 @@ public class Project3 {
                 // 2) Run the query (select → join → join → project) with chosen filter
                 Table joins = student.select(predicate).i_join(takes).i_join(course).project("cname");
 
+                long end = System.nanoTime();
+
                 // 3) End timing
-                times[i] = System.nanoTime() - start;
+                times[i] = (long) ((end - start) / 1e6);
             }
+
+            // Store the times for 6 rounds
             logger.info(Arrays.toString(times));
 
-            // 5) Discard the first iteration, average the remaining 5
-            long sum = 0;
-            for (int i = 1; i < 6; i++) {
-                sum += times[i];
-            }
-            long averageTime = sum / 5;
+            logger.info(String.format("DataSize=%d, Filter=%s, AverageTime(ms)=%d \n",
+                    j, filterType, computeAverageInMilliSeconds(times)));
 
-            // 6) Print or store the result (in nanoseconds, or convert to ms)
-            logger.info(String.format("DataSize=%d, Filter=%s, AverageTime(ns)=%d%n",
-                    j, filterType, averageTime));
         }
     }
 
@@ -110,7 +107,7 @@ public class Project3 {
                 }
         );
 
-        out.println("Generating start");
+        out.println("Generating Tuples...");
         // 2) Decide how many rows for each table
         //    Student: j, Course: j, Takes: j/8
         int[] tups = { j, j, j / 8};
@@ -118,8 +115,12 @@ public class Project3 {
         // 3) Generate the data (3D array: table i, row j, column k)
         Comparable[][][] result = generator.generate(tups);
 
-        out.println("generated");
+        out.println("Finished Generating Tuples...");
 
+        return insertTuples(result);
+    }
+
+    private static Table[] insertTuples(Comparable[][][] result) {
         // 4) Create Table objects with matching schemas
         Table student = new Table("Student",
                 "sid sname",
@@ -138,28 +139,42 @@ public class Project3 {
 
 
         // 5) Insert generated tuples into the Table objects
+        out.println("Inserting generated tuples into Table Objects");
         for (Comparable[] row : result[0]) {
             student.insert(row);
         }
-        out.println("Inserted Student");
+        out.println("Inserted Student Table");
+
         for (Comparable[] row : result[1]) {
             course.insert(row);
         }
-        out.println("Inserted Course");
+        out.println("Inserted Course Table");
+
         for (Comparable[] row : result[2]) {
             takes.insert(row);
         }
-        out.println("Inserted Takes");
+        out.println("Inserted Takes Table");
 
-        // (Optional) Create indices if desired:
-        student.createUniqueIndex("sid");
-        takes.createIndex("sid");
-        takes.createIndex("cid");
-        course.createUniqueIndex("cid");
-
-        out.println("Index Created");
+        createIndices(student, course, takes);
 
         return new Table[]{ student, course, takes };
+    }
+
+    private static void createIndices(Table student, Table course, Table takes) {
+        out.println("Start creating indices");
+        // Create indices:
+        // Skip creating Unique Index for Table Student on col sid as it is primary key
+        // Skip creating Unique Index for Table Course on col cid as it is primary key
+        // Create no-unique index on column sid and cid
+        takes.createIndex("sid");
+        takes.createIndex("cid");
+
+        // Print indexes for tables
+        student.printIndexColumns();
+        takes.printIndexColumns();
+        course.printIndexColumns();
+
+        out.println("Indices Created");
     }
 
     private static Predicate<Comparable[]> getPredicate(String filterType) {
@@ -171,4 +186,13 @@ public class Project3 {
         };
         return predicate;
     }
-}
+
+    private static long computeAverageInMilliSeconds(long[] times) {
+        // 5) Discard the first iteration, average the remaining 5
+        long sum = 0;
+        for (int i = 1; i < 6; i++) {
+            sum += times[i];
+        }
+        return sum / 5;
+    }
+ }

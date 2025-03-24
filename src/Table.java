@@ -77,7 +77,7 @@ public class Table
 
     /** The map type to be used for indices.  Change as needed.
      */
-    private static final MapType mType = MapType.LINHASH_MAP;
+    private static final MapType mType = MapType.TREE_MAP;
 
     /************************************************************************************
      * Make a map (index) given the MapType.
@@ -89,7 +89,7 @@ public class Table
         case TREE_MAP    -> new TreeMap <> ();
         case HASH_MAP    -> new HashMap <> ();
 //        Use in Project 2
-        case LINHASH_MAP -> new LinHashMap2 <> (KeyType.class, Comparable [].class);
+        case LINHASH_MAP -> new LinHashMap <> (KeyType.class, Comparable [].class);
 //        case BPTREE_MAP  -> new BpTreeMap <> (KeyType.class, Comparable [].class);
         default          -> null;
         }; // switch
@@ -106,7 +106,7 @@ public class Table
         return switch (mType) {
             case TREE_MAP    -> new TreeMap<>();
             case HASH_MAP    -> new HashMap<>();
-            case LINHASH_MAP -> new LinHashMap2 <>(Comparable.class, (Class<List<Comparable[]>>)(Class<?>)ArrayList.class);
+            case LINHASH_MAP -> new LinHashMap <>(Comparable.class, (Class<List<Comparable[]>>)(Class<?>)ArrayList.class);
 //        case BPTREE_MAP  -> new BpTreeMap <> (KeyType.class, Comparable [].class);
             default          -> throw new IllegalArgumentException("Unsupported index type: " + mType);
         };
@@ -289,8 +289,7 @@ public class Table
     public Table project (String attributes)
     {
 //        out.println ("RA> " + name + ".project (" + attributes + ")");
-        var attrs     = attributes.split (" ");
-
+        var attrs = attributes.split(" ");
         if (attrs.length == 0)
             throw new IllegalArgumentException("Empty attributes");
 
@@ -299,31 +298,24 @@ public class Table
                 throw new IllegalArgumentException("Invalid attribute: " + attr);
         }
 
-        var colDomain = extractDom (match(attrs), domain);
+        var colDomain = extractDom(match(attrs), domain);
         Set<String> keySet = new HashSet<>(Arrays.asList(key));
-        boolean isKeySubset = keySet.containsAll(Arrays.asList(attrs)); // Optimized check
-
+        boolean isKeySubset = keySet.containsAll(Arrays.asList(attrs));
         var newKey = isKeySubset ? key : attrs;
 
-        Set<List<Comparable>> uniqueRows = new HashSet<>();
+        Set<List<Comparable>> uniqueRows = new LinkedHashSet<>();
 
-        if (index != null) {
-            index.values().stream()
-                    .map(row -> Arrays.asList(extract(row, attrs))) // Convert to List for proper equality checks
-                    .forEach(uniqueRows::add);
-        } else {
-            tuples.stream()
-                    .map(row -> Arrays.asList(extract(row, attrs))) // Convert to List for proper equality checks
-                    .forEach(uniqueRows::add);
+        // Always use the tuples list, since the new Table's index may be empty.
+        for (Comparable[] row : tuples) {
+            uniqueRows.add(Arrays.asList(extract(row, attrs)));
         }
 
-        // Convert Set back to List<Comparable[]> for Table creation
-        List<Comparable[]> rows = uniqueRows.stream()
-                .map(list -> list.toArray(new Comparable[0]))
-                .collect(Collectors.toList());
+        List<Comparable[]> rows = new ArrayList<>(uniqueRows.size());
+        for (List<Comparable> list : uniqueRows) {
+            rows.add(list.toArray(new Comparable[0]));
+        }
 
-
-        return new Table (name + count++, attrs, colDomain, newKey, rows);
+        return new Table(name + count++, attrs, colDomain, newKey, rows);
     } // project
 
     /************************************************************************************
@@ -337,9 +329,10 @@ public class Table
     public Table select (Predicate <Comparable []> predicate)
     {
 //        out.println ("RA> " + name + ".select (" + predicate + ")");
-        return new Table (name + count++, attribute, domain, key,
-                   tuples.stream ().filter (t -> predicate.test (t))
-                                   .collect (Collectors.toList ()));
+        return new Table(name + count++, attribute, domain, key,
+                tuples.parallelStream()
+                        .filter(t -> predicate.test(t))
+                        .collect(Collectors.toList()));
     } // select
 
     /************************************************************************************
@@ -833,190 +826,95 @@ public class Table
      * @return  a table with tuples satisfying the equality predicate
      */
     public Table i_join(Table table2) {
-        // 1. Identify common attributes between "this" table and table2
-        List<String> commonAttrs = new ArrayList<>();
-        for (String attr1 : this.attribute) {
-            for (String attr2 : table2.attribute) {
-                if (attr1.equals(attr2)) {
-                    commonAttrs.add(attr1);
-                    break;
-                }
+        // 1. Identify common attributes and indexes efficiently
+        Map<String, Integer> thisAttrIndexMap = new HashMap<>();
+        for (int i = 0; i < this.attribute.length; i++) {
+            thisAttrIndexMap.put(this.attribute[i], i);
+        }
+
+        List<Integer> thisCommonIndexes = new ArrayList<>();
+        List<Integer> table2CommonIndexes = new ArrayList<>();
+        List<Integer> table2NonCommonIndexes = new ArrayList<>();
+        List<String> newAttributes = new ArrayList<>(Arrays.asList(this.attribute));
+        List<Class> newDomains = new ArrayList<>(Arrays.asList(this.domain));
+
+        for (int j = 0; j < table2.attribute.length; j++) {
+            if (thisAttrIndexMap.containsKey(table2.attribute[j])) {
+                thisCommonIndexes.add(thisAttrIndexMap.get(table2.attribute[j]));
+                table2CommonIndexes.add(j);
+            } else {
+                table2NonCommonIndexes.add(j);
+                newAttributes.add(table2.attribute[j]);
+                newDomains.add(table2.domain[j]);
             }
         }
 
-        if (commonAttrs.isEmpty()) {
+        if (thisCommonIndexes.isEmpty()) {
             throw new IllegalArgumentException("No common attributes for natural join between "
                     + this.name + " and " + table2.name);
         }
 
-        // 2. Check if any common attribute is indexed in table2.
-        // We'll pick the first common attribute that has a secondary index.
+        // 2. Identify indexed attribute for optimization
         String indexedAttr = null;
-        for (String attr : commonAttrs) {
+        for (String attr : thisAttrIndexMap.keySet()) {
             if (table2.secondaryIndices.containsKey(attr)) {
                 indexedAttr = attr;
                 break;
             }
         }
 
-        // 3. If no indexed attribute is found, fall back to the regular (nested-loop) natural join.
         if (indexedAttr == null) {
             return join(table2);
         }
 
-        // 4. Use the indexed attribute to drive the join.
-        // Get the column index for the join attribute in both tables.
-        int thisJoinIndex = this.col(indexedAttr);
+        int thisJoinIndex = thisAttrIndexMap.get(indexedAttr);
         int table2JoinIndex = table2.col(indexedAttr);
-
-        // Get the pre-built index from table2.
         Map<Comparable, List<Comparable[]>> indexMap = table2.secondaryIndices.get(indexedAttr);
 
-        List<Comparable[]> joinedRows = new ArrayList<>();
-        // For each tuple in "this" table, use the indexed attribute to fetch candidates from table2.
+        // 3. Estimate result size and preallocate space
+        int estimatedSize = Math.max(100, this.tuples.size() * indexMap.size() / Math.max(1, table2.tuples.size()));
+        List<Comparable[]> joinedRows = new ArrayList<>(estimatedSize);
+
+        // 4. Perform the join efficiently
         for (Comparable[] thisTuple : this.tuples) {
             Comparable joinVal = thisTuple[thisJoinIndex];
             List<Comparable[]> candidates = indexMap.get(joinVal);
+
             if (candidates != null) {
                 for (Comparable[] candidate : candidates) {
-                    // Even though the join is on the indexed attribute,
-                    // we need to check all common attributes for equality.
-                    boolean allMatch = true;
-                    for (String attr : commonAttrs) {
-                        int idxThis = this.col(attr);
-                        int idxTable2 = table2.col(attr);
-                        if (!thisTuple[idxThis].equals(candidate[idxTable2])) {
-                            allMatch = false;
+                    // Validate all common attributes match
+                    boolean match = true;
+                    for (int i = 0; i < thisCommonIndexes.size(); i++) {
+                        if (!thisTuple[thisCommonIndexes.get(i)].equals(candidate[table2CommonIndexes.get(i)])) {
+                            match = false;
                             break;
                         }
                     }
-                    if (allMatch) {
-                        // Merge the tuples.
-                        // Start with all attributes from "this" tuple.
-                        List<Comparable> merged = new ArrayList<>(Arrays.asList(thisTuple));
-                        // Add only those attributes from candidate that are not common.
-                        for (int j = 0; j < table2.attribute.length; j++) {
-                            if (!commonAttrs.contains(table2.attribute[j])) {
-                                merged.add(candidate[j]);
-                            }
-                        }
-                        joinedRows.add(merged.toArray(new Comparable[0]));
+                    if (!match) continue;
+
+                    // Merge tuples efficiently
+                    Comparable[] merged = new Comparable[thisTuple.length + table2NonCommonIndexes.size()];
+                    System.arraycopy(thisTuple, 0, merged, 0, thisTuple.length);
+
+                    int destPos = thisTuple.length;
+                    for (int j : table2NonCommonIndexes) {
+                        merged[destPos++] = candidate[j];
                     }
+
+                    joinedRows.add(merged);
                 }
             }
         }
 
-        // 5. Construct the schema (attribute names and domains) for the result.
-        List<String> newAttributes = new ArrayList<>(Arrays.asList(this.attribute));
-        List<Class> newDomains = new ArrayList<>(Arrays.asList(this.domain));
-        for (int j = 0; j < table2.attribute.length; j++) {
-            if (!commonAttrs.contains(table2.attribute[j])) {
-                newAttributes.add(table2.attribute[j]);
-                newDomains.add(table2.domain[j]);
-            }
-        }
-
-        // 6. Create and return the new Table.
-        // For simplicity, we use "this.key" as the primary key in the result.
-        return new Table(this.name + "_NJ_" + table2.name,
+        // 5. Create and return the new Table
+        return new Table(this.name + "_⨝_" + table2.name,
                 newAttributes.toArray(new String[0]),
                 newDomains.toArray(new Class[0]),
                 this.key,
                 joinedRows);
     }
 
-//    public Table i_join(Table table2) {
-//        // 1. Identify common attributes between "this" table and table2
-//        List<String> commonAttrs = new ArrayList<>();
-//        for (String attr1 : this.attribute) {
-//            for (String attr2 : table2.attribute) {
-//                if (attr1.equals(attr2)) {
-//                    commonAttrs.add(attr1);
-//                    break;
-//                }
-//            }
-//        }
-//
-//        if (commonAttrs.isEmpty()) {
-//            throw new IllegalArgumentException("No common attributes for natural join between "
-//                    + this.name + " and " + table2.name);
-//        }
-//
-//        // 2. Check if any common attribute is indexed in table2.
-//        // We'll pick the first common attribute that has a secondary index.
-//        String indexedAttr = null;
-//        for (String attr : commonAttrs) {
-//            if (table2.secondaryIndices.containsKey(attr)) {
-//                indexedAttr = attr;
-//                break;
-//            }
-//        }
-//
-//        // 3. If no indexed attribute is found, fall back to the regular (nested-loop) natural join.
-//        if (indexedAttr == null) {
-//            return join(table2);
-//        }
-//
-//        // 4. Use the indexed attribute to drive the join.
-//        // Get the column index for the join attribute in both tables.
-//        int thisJoinIndex = this.col(indexedAttr);
-//        int table2JoinIndex = table2.col(indexedAttr);
-//
-//        // Get the pre-built index from table2.
-//        Map<Comparable, List<Comparable[]>> indexMap = table2.secondaryIndices.get(indexedAttr);
-//
-//        List<Comparable[]> joinedRows = new ArrayList<>();
-//        // For each tuple in "this" table, use the indexed attribute to fetch candidates from table2.
-//        for (Comparable[] thisTuple : this.tuples) {
-//            Comparable joinVal = thisTuple[thisJoinIndex];
-//            List<Comparable[]> candidates = indexMap.get(joinVal);
-//            if (candidates != null) {
-//                for (Comparable[] candidate : candidates) {
-//                    // Even though the join is on the indexed attribute,
-//                    // we need to check all common attributes for equality.
-//                    boolean allMatch = true;
-//                    for (String attr : commonAttrs) {
-//                        int idxThis = this.col(attr);
-//                        int idxTable2 = table2.col(attr);
-//                        if (!thisTuple[idxThis].equals(candidate[idxTable2])) {
-//                            allMatch = false;
-//                            break;
-//                        }
-//                    }
-//                    if (allMatch) {
-//                        // Merge the tuples.
-//                        // Start with all attributes from "this" tuple.
-//                        List<Comparable> merged = new ArrayList<>(Arrays.asList(thisTuple));
-//                        // Add only those attributes from candidate that are not common.
-//                        for (int j = 0; j < table2.attribute.length; j++) {
-//                            if (!commonAttrs.contains(table2.attribute[j])) {
-//                                merged.add(candidate[j]);
-//                            }
-//                        }
-//                        joinedRows.add(merged.toArray(new Comparable[0]));
-//                    }
-//                }
-//            }
-//        }
-//
-//        // 5. Construct the schema (attribute names and domains) for the result.
-//        List<String> newAttributes = new ArrayList<>(Arrays.asList(this.attribute));
-//        List<Class> newDomains = new ArrayList<>(Arrays.asList(this.domain));
-//        for (int j = 0; j < table2.attribute.length; j++) {
-//            if (!commonAttrs.contains(table2.attribute[j])) {
-//                newAttributes.add(table2.attribute[j]);
-//                newDomains.add(table2.domain[j]);
-//            }
-//        }
-//
-//        // 6. Create and return the new Table.
-//        // For simplicity, we use "this.key" as the primary key in the result.
-//        return new Table(this.name + "_NJ_" + table2.name,
-//                newAttributes.toArray(new String[0]),
-//                newDomains.toArray(new Class[0]),
-//                this.key,
-//                joinedRows);
-//    }
+
 
     /************************************************************************************
      * Join this table and table2 by performing an NATURAL JOIN.  Tuples from both tables
@@ -1123,39 +1021,49 @@ public class Table
      * @param tup  the array of attribute values forming the tuple
      * @return  the insertion position/index when successful, else -1
      */
-    public int insert (Comparable [] tup)
-    {
-//        out.println ("DML> insert into " + name + " values (" + Arrays.toString (tup) + ")");
-
+    public int insert(Comparable[] tup) {
+        // Check tuple type
         if (!typeCheck(tup)) {
             return -1;
         }
 
+        // Insert into primary index (KeyType-based)
         KeyType primaryKey = extractPrimaryKey(tup);
         if (index != null && index.putIfAbsent(primaryKey, tup) != null) {
             throw new IllegalArgumentException("Duplicate primary key: " + primaryKey);
         }
 
+        // Add tuple to the main storage
         tuples.add(tup);
 
-        if (index != null && !secondaryIndices.isEmpty()) {
-            for (var entry : secondaryIndices.entrySet()) {
-                String columnName = entry.getKey();
-                Map<Comparable, List<Comparable[]>> columnIndex = entry.getValue();
-
-                int colIdx = col(columnName);
-                if (colIdx == -1) {
-                    throw new IllegalStateException("Column " + columnName + " is indexed but does not exist in table " + name);
-                }
-
-                Comparable key = tup[colIdx];
-                columnIndex.putIfAbsent(key, new ArrayList<>());
-                columnIndex.get(key).add(tup);
+        // Ensure that for each primary key column (and any column you want auto-indexed),
+        // a secondary index exists. For example, for primary keys like "sid".
+        for (String primaryCol : key) {
+            if (!secondaryIndices.containsKey(primaryCol)) {
+                // Create a new secondary index for this primary column
+                secondaryIndices.put(primaryCol, makeIndexMap());
             }
         }
 
+        // Now update all secondary indices (both auto-created for primary key columns
+        // and any that were explicitly created via createIndex or createUniqueIndex).
+        for (var entry : secondaryIndices.entrySet()) {
+            String columnName = entry.getKey();
+            Map<Comparable, List<Comparable[]>> columnIndex = entry.getValue();
+
+            int colIdx = col(columnName);
+            if (colIdx == -1) {
+                throw new IllegalStateException("Column " + columnName + " is indexed but does not exist in table " + name);
+            }
+
+            Comparable keyVal = tup[colIdx];
+            columnIndex.putIfAbsent(keyVal, new ArrayList<>());
+            columnIndex.get(keyVal).add(tup);
+        }
+
         return tuples.size() - 1;
-    } // insert
+    }
+
 
     /************************************************************************************
      * Get the tuple at index position i.
@@ -1224,6 +1132,32 @@ public class Table
         } // if
         out.println ("-------------------");
     } // printIndex
+
+    /**
+     * Print a summary of the indexed columns for this table.
+     * It prints the primary key columns (as defined in the table's key)
+     * and the column names for which a secondary index has been created.
+     */
+    public void printIndexColumns() {
+        out.println("Table: " + name);
+
+        // Print primary key columns.
+        if (key != null && key.length > 0) {
+            out.println("  Primary Key Column(s): " + String.join(", ", key));
+        } else {
+            out.println("  Primary Key Column(s): None");
+        }
+
+        // Print secondary index columns.
+        if (secondaryIndices != null && !secondaryIndices.isEmpty()) {
+            // secondaryIndices is a Map<String, ...> where keys are column names
+            out.println("  Secondary Indexed Column(s): " + String.join(", ", secondaryIndices.keySet()));
+        } else {
+            out.println("  Secondary Indexed Column(s): None");
+        }
+    }
+
+
 
     /************************************************************************************
      * Load the table with the given name into memory.
